@@ -1,0 +1,115 @@
+const { describe, it, beforeEach, afterEach, mock } = require('node:test');
+const assert = require('node:assert');
+require("./test-setup.js");
+
+global.window.getSelection = () => ({
+    rangeCount: 1,
+    getRangeAt: () => ({
+        startContainer: document.body,
+        endContainer: document.body,
+        commonAncestorContainer: document.body,
+        getBoundingClientRect: () => ({ top: 0, left: 0, width: 100, height: 100 }),
+        toString: () => "selected text"
+    }),
+    removeAllRanges: () => {},
+    toString: () => "selected text",
+    isCollapsed: false
+});
+
+describe('Marklet Hotkeys & Delete Handling', () => {
+    let marklet;
+
+    beforeEach(async () => {
+        document.body.innerHTML = '';
+        chrome.storage.local.get = mock.fn((keys, callback) => {
+             const res = { extensionEnabled: true };
+             if (callback) callback(res);
+             return Promise.resolve(res);
+        });
+        chrome.storage.local.set = mock.fn(async () => {});
+        
+        marklet = new Marklet();
+        await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    afterEach(async () => {
+        if (marklet) marklet.destroyAll();
+        await new Promise(resolve => setTimeout(resolve, 100));
+    });
+
+    it('should use default hotkey (Alt+H) to highlight selection', async () => {
+        let applyHighlightCalled = false;
+        marklet.highlighter.applyHighlight = () => { applyHighlightCalled = true; };
+        marklet.highlighter.isValidSelection = () => true;
+
+        const event = new window.KeyboardEvent('keydown', {
+            key: 'h',
+            code: 'KeyH',
+            altKey: true,
+            bubbles: true
+        });
+
+        document.dispatchEvent(event);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        assert.strictEqual(applyHighlightCalled, true, "Alt+H should trigger highlight");
+    });
+
+    it('should use default hotkey (Alt+Shift+W) to toggle whiteboard', async () => {
+        const initialStatus = marklet.whiteboardActive;
+        const event = new window.KeyboardEvent('keydown', {
+            key: 'w',
+            code: 'KeyW',
+            altKey: true,
+            shiftKey: true,
+            bubbles: true
+        });
+
+        document.dispatchEvent(event);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        assert.notStrictEqual(marklet.whiteboardActive, initialStatus, "Alt+Shift+W should toggle whiteboard");
+    });
+
+    it('should hide drawing toolbar when Delete key is pressed on selected stroke', async () => {
+        marklet.whiteboard.active = true;
+        marklet.whiteboardActive = true;
+        marklet.whiteboard.mode = 'select';
+        marklet.whiteboard.selectedStroke = { type: 'draw', points: [] };
+        marklet.whiteboard.strokes = [marklet.whiteboard.selectedStroke];
+
+        let hideToolbarCalled = false;
+        marklet.ui.hideDrawingToolbar = () => { hideToolbarCalled = true; };
+
+        const event = new KeyboardEvent('keydown', {
+            key: 'Delete',
+            code: 'Delete',
+            bubbles: true
+        });
+
+        document.dispatchEvent(event);
+
+        assert.strictEqual(hideToolbarCalled, true, "Delete key should hide drawing toolbar");
+        assert.strictEqual(marklet.whiteboard.selectedStroke, null, "Selected stroke should be null after delete");
+    });
+
+     it('should hide drawing toolbar when Backspace key is pressed on selected stroke', async () => {
+        marklet.whiteboard.active = true;
+        marklet.whiteboardActive = true;
+        marklet.whiteboard.mode = 'select';
+        marklet.whiteboard.selectedStroke = { type: 'draw', points: [] };
+        marklet.whiteboard.strokes = [marklet.whiteboard.selectedStroke];
+
+        let hideToolbarCalled = false;
+        marklet.ui.hideDrawingToolbar = () => { hideToolbarCalled = true; };
+
+        const event = new KeyboardEvent('keydown', {
+            key: 'Backspace',
+            code: 'Backspace',
+            bubbles: true
+        });
+
+        document.dispatchEvent(event);
+
+        assert.strictEqual(hideToolbarCalled, true, "Backspace key should hide drawing toolbar");
+        assert.strictEqual(marklet.whiteboard.selectedStroke, null, "Selected stroke should be null after delete");
+    });
+});

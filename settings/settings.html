@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marklet Settings</title>
+    <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div class="logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+                    </svg>
+                    <h1>Marklet Settings</h1>
+                </div>
+            </div>
+        </header>
+
+        <main class="settings-content">
+            <section class="settings-section">
+                <h2>General</h2>
+                <div class="setting-item">
+                    <span>Enable Extension</span>
+                    <label class="switch">
+                        <input type="checkbox" id="global-enable-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <span>Enable on New Sites</span>
+                    <label class="switch">
+                        <input type="checkbox" id="enable-by-default-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <span>Selection Toolbar</span>
+                    <label class="switch">
+                        <input type="checkbox" id="toolbar-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <span>Theme</span>
+                    <select id="theme-select">
+                        <option value="system">System Default</option>
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                    </select>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Highlights</h2>
+                <div class="setting-item">
+                    <span>Default Color</span>
+                    <input type="color" id="default-highlight-color">
+                </div>
+                <div class="setting-item">
+                    <span>Shadows</span>
+                    <label class="switch">
+                        <input type="checkbox" id="shadows-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <span>Rounded Corners</span>
+                    <label class="switch">
+                        <input type="checkbox" id="rounded-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Drawings</h2>
+                <div class="setting-item">
+                    <span>Default Color</span>
+                    <input type="color" id="default-draw-color">
+                </div>
+                <div class="setting-item">
+                    <span>Drawing Opacity (%)</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="range" id="drawing-opacity" min="1" max="100" value="100">
+                        <span id="draw-opacity-val" style="font-size: 12px; min-width: 24px;">100</span>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <span>Blend Mode</span>
+                    <select id="blend-mode-select">
+                        <option value="normal">Normal</option>
+                        <option value="multiply">Multiply</option>
+                        <option value="screen" selected>Screen</option>
+                        <option value="overlay">Overlay</option>
+                        <option value="darken">Darken</option>
+                        <option value="lighten">Lighten</option>
+                        <option value="color-dodge">Color Dodge</option>
+                        <option value="color-burn">Color Burn</option>
+                        <option value="hard-light">Hard Light</option>
+                        <option value="soft-light">Soft Light</option>
+                        <option value="difference">Difference</option>
+                        <option value="exclusion">Exclusion</option>
+                        <option value="hue">Hue</option>
+                        <option value="saturation">Saturation</option>
+                        <option value="color">Color</option>
+                        <option value="luminosity">Luminosity</option>
+                    </select>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Disabled Sites</h2>
+                <div class="setting-item" style="display: block;">
+                    <div id="disabled-sites-list" class="sites-list"></div>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Manage Highlights</h2>
+                <div class="search-bar">
+                    <input type="text" id="page-search" placeholder="Search pages or highlights...">
+                </div>
+                <div id="pages-list" class="pages-list"></div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Data</h2>
+                <div class="data-actions">
+                    <button id="export-btn" class="btn primary">Export Data</button>
+                    <button id="import-btn" class="btn secondary">Import Data</button>
+                    <input type="file" id="import-file" accept=".json" hidden>
+                </div>
+            </section>
+
+            <section class="settings-section">
+                <h2>Hotkeys</h2>
+                <div class="setting-item">
+                    <span>Highlight Selection</span>
+                    <input type="text" class="hotkey-input" id="hotkey-highlight" placeholder="Press key...">
+                </div>
+                <div class="setting-item">
+                    <span>Toggle Whiteboard</span>
+                    <input type="text" class="hotkey-input" id="hotkey-whiteboard" placeholder="Press key...">
+                </div>
+                <div class="setting-item">
+                    <span>Toggle Drawings</span>
+                    <input type="text" class="hotkey-input" id="hotkey-drawings" placeholder="Press key...">
+                </div>
+                <div class="setting-item">
+                    <span>Toggle Highlights</span>
+                    <input type="text" class="hotkey-input" id="hotkey-highlights" placeholder="Press key...">
+                </div>
+                <div class="setting-item">
+                    <span>Toggle All UI</span>
+                    <input type="text" class="hotkey-input" id="hotkey-all" placeholder="Press key...">
+                </div>
+            </section>
+            
+            <div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
+                <button id="reset-defaults-btn" class="btn danger">Reset all to default</button>
+            </div>
+        </main>
+        <footer>
+            Made with care by <a href="https://jelodar.com" target="_blank">Reza Jelodar</a> · <a href="https://github.com/Jelodar/marklet" target="_blank">Source Code</a>
+        </footer>
+    </div>
+    <script src="settings.js"></script>
+</body>
+</html>

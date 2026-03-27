@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Marklet",
+  "version": "1.0.0",
+  "description": "Highlight and annotate web pages with marker-style overlays and freehand drawings.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "contextMenus",
+    "scripting",
+    "unlimitedStorage",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_ui": {
+    "page": "settings/settings.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "utils/shared.js",
+        "content/assets.js",
+        "content/dom_utils.js",
+        "content/ui.js",
+        "content/whiteboard.js",
+        "content/highlighter.js",
+        "content/marklet.js"
+      ]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

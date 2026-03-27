@@ -1,0 +1,24 @@
+{
+  "name": "marklet",
+  "version": "1.0.0",
+  "description": "Highlight and annotate web pages with marker-style overlays and freehand drawings.",
+  "main": "background.js",
+  "scripts": {
+    "test": "node --test",
+    "build": "echo 'No build step required'",
+    "lint": "echo 'No lint step required'"
+  },
+  "keywords": [
+    "chrome-extension",
+    "highlight",
+    "annotation",
+    "drawing",
+    "productivity"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "jsdom": "^24.1.3"
+  }
+}
