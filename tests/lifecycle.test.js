@@ -32,9 +32,10 @@ global.document = {
     setAttribute: () => {},
     closest: () => null
   }),
-  body: { appendChild: () => {}, scrollHeight: 1000, scrollWidth: 1000 },
+  body: { appendChild: () => {}, removeChild: () => {}, scrollHeight: 1000, scrollWidth: 1000 },
   head: { appendChild: () => {} },
   documentElement: { 
+    appendChild: () => {},
     scrollWidth: 1000, scrollHeight: 1000, clientWidth: 1000, clientHeight: 1000,
     classList: { add: () => {}, remove: () => {}, contains: () => false, toggle: () => {} },
     setAttribute: () => {}
@@ -53,7 +54,7 @@ global.window = {
 global.Node = { ELEMENT_NODE: 1, TEXT_NODE: 3 };
 global.MutationObserver = class { observe() {} disconnect() {} };
 
-global.SharedUtils = { isValidExtension: () => true, normalizeUrl: (u) => u };
+global.SharedUtils = { isValidExtension: () => true, normalizeUrl: (u) => u, isSavable: () => true };
 global.Whiteboard = class { 
     constructor(app) { 
         this.app = app; 
@@ -87,7 +88,7 @@ global.UI = class {
 };
 global.DOMUtils = { stripHighlights: () => {} };
 global.SHADOW_STYLES = "";
-global.CONSTANTS = { OBSERVER_MAX_WAIT: 100, OBSERVER_DEBOUNCE: 50 };
+global.CONSTANTS = require('../utils/consts.js').CONSTANTS;
 
 describe('Lifecycle Tests', () => {
     let marklet;

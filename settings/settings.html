@@ -11,9 +11,7 @@
         <header>
             <div class="header-content">
                 <div class="logo">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
-                    </svg>
+                    <img src="../icons/icon128.png" width="32px" height="32px" />
                     <h1>Marklet Settings</h1>
                 </div>
             </div>
@@ -23,28 +21,40 @@
             <section class="settings-section">
                 <h2>General</h2>
                 <div class="setting-item">
-                    <span>Enable Extension</span>
+                    <div class="setting-info">
+                        <span>Enable Extension</span>
+                        <div class="setting-hint">Turn Marklet on or off globally across all websites.</div>
+                    </div>
                     <label class="switch">
                         <input type="checkbox" id="global-enable-toggle">
                         <span class="slider"></span>
                     </label>
                 </div>
                 <div class="setting-item">
-                    <span>Enable on New Sites</span>
+                    <div class="setting-info">
+                        <span>Auto-enable on New Sites</span>
+                        <div class="setting-hint">Automatically activate tools when visiting a site for the first time.</div>
+                    </div>
                     <label class="switch">
                         <input type="checkbox" id="enable-by-default-toggle">
                         <span class="slider"></span>
                     </label>
                 </div>
                 <div class="setting-item">
-                    <span>Selection Toolbar</span>
+                    <div class="setting-info">
+                        <span>Floating Selection Menu</span>
+                        <div class="setting-hint">Show a quick-access toolbar immediately after selecting text.</div>
+                    </div>
                     <label class="switch">
                         <input type="checkbox" id="toolbar-toggle">
                         <span class="slider"></span>
                     </label>
                 </div>
                 <div class="setting-item">
-                    <span>Theme</span>
+                    <div class="setting-info">
+                        <span>Interface Theme</span>
+                        <div class="setting-hint">Switch between Light, Dark, or System appearance.</div>
+                    </div>
                     <select id="theme-select">
                         <option value="system">System Default</option>
                         <option value="light">Light</option>
@@ -56,20 +66,39 @@
             <section class="settings-section">
                 <h2>Highlights</h2>
                 <div class="setting-item">
-                    <span>Default Color</span>
+                    <div class="setting-info">
+                        <span>Standard Highlight Color</span>
+                        <div class="setting-hint">The initial color assigned to any new text highlight.</div>
+                    </div>
                     <input type="color" id="default-highlight-color">
                 </div>
                 <div class="setting-item">
-                    <span>Shadows</span>
+                    <div class="setting-info">
+                        <span>Highlight Shadows</span>
+                        <div class="setting-hint">Add a subtle depth effect to highlights for better visibility.</div>
+                    </div>
                     <label class="switch">
                         <input type="checkbox" id="shadows-toggle">
                         <span class="slider"></span>
                     </label>
                 </div>
                 <div class="setting-item">
-                    <span>Rounded Corners</span>
+                    <div class="setting-info">
+                        <span>Rounded Corners</span>
+                        <div class="setting-hint">Give highlights a modern, soft-edged look.</div>
+                    </div>
                     <label class="switch">
                         <input type="checkbox" id="rounded-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-info">
+                        <span>Annotate Read-only Fields</span>
+                        <div class="setting-hint">Enable highlighting within non-editable text areas and inputs.</div>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="readonly-highlight-toggle">
                         <span class="slider"></span>
                     </label>
                 </div>
@@ -78,18 +107,27 @@
             <section class="settings-section">
                 <h2>Drawings</h2>
                 <div class="setting-item">
-                    <span>Default Color</span>
+                    <div class="setting-info">
+                        <span>Standard Pen Color</span>
+                        <div class="setting-hint">The starting color for whiteboard strokes and shapes.</div>
+                    </div>
                     <input type="color" id="default-draw-color">
                 </div>
                 <div class="setting-item">
-                    <span>Drawing Opacity (%)</span>
+                    <div class="setting-info">
+                        <span>Drawing Opacity</span>
+                        <div class="setting-hint">Adjust the transparency of your whiteboard annotations.</div>
+                    </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <input type="range" id="drawing-opacity" min="1" max="100" value="100">
                         <span id="draw-opacity-val" style="font-size: 12px; min-width: 24px;">100</span>
                     </div>
                 </div>
                 <div class="setting-item">
-                    <span>Blend Mode</span>
+                    <div class="setting-info">
+                        <span>Canvas Blend Mode</span>
+                        <div class="setting-hint">Control how drawing colors interact with the underlying page.</div>
+                    </div>
                     <select id="blend-mode-select">
                         <option value="normal">Normal</option>
                         <option value="multiply">Multiply</option>
@@ -119,11 +157,12 @@
             </section>
 
             <section class="settings-section">
-                <h2>Manage Highlights</h2>
+                <h2>Manage Annotations</h2>
                 <div class="search-bar">
-                    <input type="text" id="page-search" placeholder="Search pages or highlights...">
+                    <input type="text" id="page-search" placeholder="Search pages, highlights or drawings...">
                 </div>
                 <div id="pages-list" class="pages-list"></div>
+                <div id="pagination" class="pagination"></div>
             </section>
 
             <section class="settings-section">
@@ -164,9 +203,11 @@
             </div>
         </main>
         <footer>
-            Made with care by <a href="https://jelodar.com" target="_blank">Reza Jelodar</a> · <a href="https://github.com/Jelodar/marklet" target="_blank">Source Code</a>
+            Made with ❤️ by <a href="https://jelodar.com" target="_blank">Reza Jelodar</a> · <a href="https://github.com/Jelodar/marklet" target="_blank">Source Code</a>
         </footer>
     </div>
+    <script src="../utils/tiny-idb.js"></script>
+    <script src="../utils/shared.js"></script>
     <script src="settings.js"></script>
 </body>
 </html>

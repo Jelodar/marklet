@@ -112,4 +112,39 @@ describe('UI Interactions', () => {
         assert.ok(popover, 'Varieties popover should be visible');
         popover.remove();
     });
+
+    it('should show varieties popover on right click of a swatch', async () => {
+        ui.togglePalette(true);
+        const swatch = ui.palette.querySelector('.color-swatch');
+        
+        swatch.dispatchEvent(new MouseEvent('contextmenu'));
+        
+        const popover = ui.container.querySelector('.varieties-popover');
+        assert.ok(popover, 'Varieties popover should be visible on right click');
+        popover.remove();
+    });
+
+    it('should remember origin colors for varieties even after swatch color change', async () => {
+        ui.togglePalette(true);
+        const swatch = ui.palette.querySelector('.color-swatch[data-index="0"]');
+        const originalOrigin = ui.originColors[0];
+        
+        swatch.dispatchEvent(new MouseEvent('contextmenu'));
+        let popover = ui.container.querySelector('.varieties-popover');
+        const varietySwatches = popover.querySelectorAll('.variety-swatch');
+        const newColor = varietySwatches[0].dataset.color;
+        
+        varietySwatches[0].click();
+        
+        assert.strictEqual(ui.baseColors[0], newColor);
+        assert.strictEqual(ui.originColors[0], originalOrigin);
+        
+        const updatedSwatch = ui.palette.querySelector('.color-swatch[data-index="0"]');
+        updatedSwatch.dispatchEvent(new MouseEvent('contextmenu'));
+        popover = ui.container.querySelector('.varieties-popover');
+        
+        const popoverSwatches = popover.querySelectorAll('.variety-swatch');
+        assert.strictEqual(popoverSwatches[4].dataset.color.toLowerCase(), originalOrigin.toLowerCase());
+        popover.remove();
+    });
 });

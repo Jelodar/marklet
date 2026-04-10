@@ -2,10 +2,21 @@ class DOMUtils {
   static getGlobalOffsets(range) {
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let offset = 0, start = -1, end = -1, node;
-    const { startContainer: sc, endContainer: ec } = range;
+    const sc = range.startContainer, ec = range.endContainer;
+    const so = range.startOffset, eo = range.endOffset;
+
+    const getFirstTextNode = (root) => {
+        if (root.nodeType === 3) return root;
+        const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        return tw.nextNode();
+    };
+
+    const scText = sc.nodeType === 3 ? sc : getFirstTextNode(sc.childNodes[so] || sc);
+    const ecText = ec.nodeType === 3 ? ec : getFirstTextNode(ec.childNodes[eo - 1] || ec);
+
     while ((node = w.nextNode())) {
-      if (node === sc) start = offset + range.startOffset;
-      if (node === ec) end = offset + range.endOffset;
+      if (node === scText) start = offset + (sc.nodeType === 3 ? so : 0);
+      if (node === ecText) end = offset + (ec.nodeType === 3 ? eo : node.textContent.length);
       offset += node.textContent.length;
     }
     return (start === -1 || end === -1) ? null : { start, end };
@@ -140,6 +151,46 @@ class DOMUtils {
         if (p) { while (el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); }
       });
     document.body.normalize();
+  }
+  static getTextFragment(range) {
+    const fullText = DOMUtils.getDocumentText(), offsets = DOMUtils.getGlobalOffsets(range);
+    if (!offsets) return "";
+    const rangeText = range.toString().trim().replace(/\s+/g, " ");
+    if (!rangeText) return "";
+
+    const isUnique = (text) => {
+        const first = fullText.indexOf(text);
+        return first !== -1 && first === fullText.lastIndexOf(text);
+    };
+
+    const getSafeWords = (text, count, fromEnd = false) => {
+        const words = text.trim().split(/\s+/).filter(Boolean);
+        if (fromEnd) return words.slice(-count).join(" ");
+        return words.slice(0, count).join(" ");
+    };
+
+    if (rangeText.length <= 64 && isUnique(rangeText)) return `#:~:text=${encodeURIComponent(rangeText)}`;
+
+    let textStart = rangeText, textEnd = "";
+    if (rangeText.length > 64) {
+        textStart = getSafeWords(rangeText, 3);
+        textEnd = getSafeWords(rangeText, 3, true);
+    }
+
+    const contextLen = 100;
+    const prefixFull = fullText.substring(Math.max(0, offsets.start - contextLen), offsets.start);
+    const suffixFull = fullText.substring(offsets.end, Math.min(fullText.length, offsets.end + contextLen));
+    
+    const prefix = getSafeWords(prefixFull, 2, true);
+    const suffix = getSafeWords(suffixFull, 2);
+
+    let fragment = "#:~:text=";
+    if (prefix) fragment += `${encodeURIComponent(prefix)}-,`;
+    fragment += encodeURIComponent(textStart);
+    if (textEnd) fragment += `,${encodeURIComponent(textEnd)}`;
+    if (suffix) fragment += `,-${encodeURIComponent(suffix)}`;
+    
+    return fragment;
   }
 }
 

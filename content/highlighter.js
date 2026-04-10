@@ -1,21 +1,30 @@
 class Highlighter {
-  constructor(app) { this.app = app; this.currentColor = "#FFFF00"; this.selectionToolbarEnabled = true; this.isProcessing = false; this.init(); }
+  constructor(app) {
+    this.app = app;
+    this.currentColor = "#FFFF00";
+    this.selectionToolbarEnabled = true;
+    this.allowReadonly = true;
+    this.isProcessing = false;
+    this.localPage = { highlights: [] };
+    this.init();
+  }
   init() {
     this.mouseUpListener = (e) => this.handleSelection(e);
     this.selectionChangeListener = (e) => this.handleSelectionChange(e);
     this.clickListener = (e) => this.handleHighlightClick(e);
     this.storageListener = (c) => {
         if (SharedUtils.isValidExtension()) {
-            if (c.pages && !this.isProcessing) this.loadHighlights();
             if (c.highlightShadowsEnabled) document.documentElement.classList.toggle("marklet-shadows", c.highlightShadowsEnabled.newValue);
             if (c.highlightRounded) document.documentElement.classList.toggle("marklet-rounded", c.highlightRounded.newValue);
+            if (c.allowReadonlyHighlight) this.allowReadonly = c.allowReadonlyHighlight.newValue;
         }
     };
     document.addEventListener("mouseup", this.mouseUpListener);
     document.addEventListener("selectionchange", this.selectionChangeListener);
     document.addEventListener("click", this.clickListener);
     chrome.storage.onChanged.addListener(this.storageListener);
-    this.loadHighlights(); this.loadDefaultColor();
+    this.loadHighlights();
+    this.loadDefaultColor();
   }
   destroy() {
     document.removeEventListener("mouseup", this.mouseUpListener);
@@ -29,7 +38,13 @@ class Highlighter {
       if (!s || s.isCollapsed) this.app.ui.hideSelectionToolbar();
     }
   }
-  async loadDefaultColor() { if (SharedUtils.isValidExtension()) { const d = await chrome.storage.local.get(["defaultHighlightColor"]); if (d.defaultHighlightColor) this.currentColor = d.defaultHighlightColor; } }
+  async loadDefaultColor() {
+    if (SharedUtils.isValidExtension()) {
+      const d = await chrome.storage.local.get(["defaultHighlightColor", "allowReadonlyHighlight"]);
+      if (d.defaultHighlightColor) this.currentColor = d.defaultHighlightColor;
+      this.allowReadonly = d.allowReadonlyHighlight !== false;
+    }
+  }
   isValidSelection(s) {
     if (!s || s.isCollapsed || s.rangeCount === 0 || !s.toString().trim()) return false;
     const range = s.getRangeAt(0);
@@ -47,19 +62,23 @@ class Highlighter {
       }
       const b = s.getRangeAt(0).getBoundingClientRect();
       if (b.width > 0 && b.height > 0 && this.app.ui) this.app.ui.showSelectionToolbar(b.left + b.width / 2, b.top, s.getRangeAt(0));
-    }, 150);
+    }, CONSTANTS.SELECTION_DEBOUNCE);
   }
   isEditable(node) {
     let el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
     while (el && el !== document.body) {
-      if (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) return true;
+      if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true') return true;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) {
+        if (this.allowReadonly && (el.tagName === "INPUT" || el.tagName === "TEXTAREA") && el.readOnly) return false;
+        return true;
+      }
       el = el instanceof ShadowRoot ? el.host : (el.parentElement || el.parentNode);
     }
     return false;
   }
   resolveStoredHighlights(highlights) {
     let fullDOMText = null;
-    const rangeRequests = [];
+    const resolved = [], unresolved = [];
     highlights.forEach(h => {
       let r = DOMUtils.resolveRange(h.anchor);
       const normalize = (s) => (s || "").replace(/\s+/g, " ").trim();
@@ -70,31 +89,38 @@ class Highlighter {
         if (fr) r = fr;
       }
       if (r && stored && normalize(r.toString()) !== stored) r = null;
-      if (r) rangeRequests.push({ id: h.id, range: r, highlight: h });
+      if (r) resolved.push({ id: h.id, range: r, highlight: h });
+      else unresolved.push(h);
     });
-    return rangeRequests;
+    return { resolved, unresolved };
   }
-
   async applyHighlight(r, c, isHotkey = false) {
     if (!SharedUtils.isValidExtension() || this.isProcessing) return;
-    if (this.isEditable(r.startContainer) || this.isEditable(r.endContainer)) { this.app.ui.showNotification("Cannot highlight editable content"); return; }
-    this.isProcessing = true; this.app.hasHighlights = true; this.app.pauseObserver();
+    if (this.isEditable(r.startContainer) || this.isEditable(r.endContainer)) {
+      this.app.ui.showNotification("Cannot highlight editable content");
+      return;
+    }
+    this.isProcessing = true;
+    this.app.hasHighlights = true;
+    this.app.pauseObserver();
     try {
       const url = SharedUtils.normalizeUrl(window.location.href);
-      const d = await chrome.storage.local.get(["pages"]);
-      const pages = d.pages || {};
-      if (!pages[url]) pages[url] = { url, highlights: [], drawings: [] };
+      const page = await tinyIDB.get(url) || { url, highlights: [], drawings: [] };
       const newOffsets = DOMUtils.getGlobalOffsets(r);
       const text = r.toString();
       if (!newOffsets) throw new Error("Unable to calculate offsets");
       DOMUtils.stripHighlights();
-      
-      const rangeRequests = this.resolveStoredHighlights(pages[url].highlights);
-      
+      const { resolved: rangeRequests, unresolved: initiallyUnresolved } = this.resolveStoredHighlights(page.highlights);
       const offsetMap = DOMUtils.getBatchGlobalOffsets(rangeRequests);
-      const resolvedHighlights = rangeRequests.map(req => { const off = offsetMap.get(req.id); return off ? { ...req.highlight, start: off.start, end: off.end } : null; }).filter(Boolean);
+      const resolvedHighlights = [];
+      const unresolved = [...initiallyUnresolved];
+      rangeRequests.forEach(req => {
+        const off = offsetMap.get(req.id);
+        if (off) resolvedHighlights.push({ ...req.highlight, start: off.start, end: off.end });
+        else unresolved.push(req.highlight);
+      });
       const merged = this.flattenIntervals(resolvedHighlights, { start: newOffsets.start, end: newOffsets.end, color: c, text });
-      await this.renderAndSave(merged, pages, url);
+      await this.renderAndSave(merged, page, url, unresolved);
       this.app.ui.trackRecentColor(c);
       window.getSelection().removeAllRanges();
       const newHighlight = merged.find(m => m.start <= newOffsets.start && m.end >= newOffsets.end);
@@ -107,7 +133,13 @@ class Highlighter {
       } else {
           this.app.ui.hideSelectionToolbar();
       }
-    } catch (err) { console.error("Marklet:", err); this.loadHighlights(); } finally { this.isProcessing = false; this.app.updateObserverState(); }
+    } catch (err) {
+      console.error("Marklet:", err);
+      this.loadHighlights();
+    } finally {
+      this.isProcessing = false;
+      this.app.updateObserverState();
+    }
   }
   flattenIntervals(ex, item) {
     const res = [];
@@ -127,127 +159,192 @@ class Highlighter {
     const m = [intervals[0]];
     for (let i = 1; i < intervals.length; i++) {
       const c = m[m.length - 1], n = intervals[i];
-      if (n.start <= c.end && n.color === c.color) { c.end = Math.max(c.end, n.end); c.text = null; } else m.push(n);
+      if (n.start <= c.end && n.color === c.color) {
+        c.end = Math.max(c.end, n.end);
+        c.text = null;
+      } else m.push(n);
     }
     return m;
   }
-  renderIntervals(intervals) { intervals.forEach(item => { const r = DOMUtils.getRangeFromOffsets(item.start, item.end); if (r) this.renderHighlight(r, item.color, item.id); }); }
-  async renderAndSave(intervals, pages, url) {
+  renderIntervals(intervals) {
+    const displayCache = new WeakMap();
+    intervals.forEach(item => {
+      const r = DOMUtils.getRangeFromOffsets(item.start, item.end);
+      if (r) this.renderHighlight(r, item.color, item.id, displayCache);
+    });
+  }
+  async renderAndSave(intervals, page, url, unresolved = []) {
     DOMUtils.stripHighlights();
     const docLength = DOMUtils.getDocumentText().length;
-    pages[url].highlights = intervals.map(m => {
+    const highlights = intervals.map(m => {
       const range = DOMUtils.getRangeFromOffsets(m.start, m.end);
       if (!range) return null;
-      const id = m.id || crypto.randomUUID(); m.id = id;
+      const id = m.id || crypto.randomUUID();
+      m.id = id;
       return { id, url, color: m.color, text: m.text || range.toString(), anchor: DOMUtils.serializeRange(range), start: m.start, docLength, timestamp: Date.now() };
     }).filter(Boolean);
+    if (this.app.isSavable) {
+      page.highlights = [...highlights, ...unresolved];
+      page.lastUpdated = Date.now();
+      await tinyIDB.set(url, page);
+    } else {
+      this.localPage.highlights = [...highlights, ...unresolved];
+      this.localPage.lastUpdated = Date.now();
+    }
     this.renderIntervals(intervals);
-    await chrome.storage.local.set({ pages });
   }
   async loadHighlights() {
     if (!SharedUtils.isValidExtension() || this.isProcessing) return;
-    this.isProcessing = true; this.app.pauseObserver();
+    this.isProcessing = true;
+    this.app.pauseObserver();
     try {
-      const d = await chrome.storage.local.get(["pages"]);
       const url = SharedUtils.normalizeUrl(window.location.href);
-      const pageHighlights = d.pages?.[url]?.highlights || [];
+      let pageHighlights = [];
+      if (this.app.isSavable) {
+        const page = await tinyIDB.get(url);
+        pageHighlights = page?.highlights || [];
+      } else {
+        pageHighlights = this.localPage.highlights || [];
+      }
       DOMUtils.stripHighlights();
       this.app.hasHighlights = pageHighlights.length > 0;
       if (!this.app.hasHighlights) return;
-      
-      const rangeRequests = this.resolveStoredHighlights(pageHighlights);
-      
+      const { resolved: rangeRequests } = this.resolveStoredHighlights(pageHighlights);
       const offsetMap = DOMUtils.getBatchGlobalOffsets(rangeRequests);
       this.renderIntervals(rangeRequests.map(req => offsetMap.get(req.id) ? { start: offsetMap.get(req.id).start, end: offsetMap.get(req.id).end, color: req.highlight.color, id: req.id } : null).filter(Boolean));
-    } catch (e) { console.error("Marklet:", e); } finally { this.isProcessing = false; this.app.updateObserverState(); }
+    } catch (e) {
+      console.error("Marklet:", e);
+    } finally {
+      this.isProcessing = false;
+      this.app.updateObserverState();
+    }
   }
-  renderHighlight(r, c, id) {
+  renderHighlight(r, c, id, displayCache = new WeakMap()) {
     const nodes = [];
     const w = document.createTreeWalker(r.commonAncestorContainer, NodeFilter.SHOW_TEXT, { acceptNode: (n) => r.intersectsNode(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
     while (w.nextNode()) nodes.push(w.currentNode);
     if (nodes.length === 0 && r.commonAncestorContainer.nodeType === Node.TEXT_NODE) nodes.push(r.commonAncestorContainer);
     const textColor = this.getContrastColor(c);
     const nodeData = nodes.map(n => ({ node: n, start: n === r.startContainer ? r.startOffset : 0, end: n === r.endContainer ? r.endOffset : n.textContent.length }));
-    const processedParents = new Set();
+    const wrappedParents = new Set();
     nodeData.forEach(({ node: n }) => {
       const p = n.parentNode;
-      if (p && !processedParents.has(p) && (window.getComputedStyle(p).display.includes("flex") || window.getComputedStyle(p).display.includes("grid")) && !p.classList.contains("marklet-flex-wrapper")) {
+      if (!p || p.nodeType !== 1 || wrappedParents.has(p) || p.classList.contains("marklet-flex-wrapper") || p.classList.contains("marklet-highlight")) return;
+      
+      let isFlexGrid = displayCache.get(p);
+      if (isFlexGrid === undefined) {
+        const display = window.getComputedStyle(p).display;
+        isFlexGrid = display.includes("flex") || display.includes("grid");
+        displayCache.set(p, isFlexGrid);
+      }
+
+      if (isFlexGrid) {
         let start = n, end = n;
         while (start.previousSibling && (start.previousSibling.nodeType === 3 || start.previousSibling.nodeName === "MARK")) start = start.previousSibling;
         while (end.nextSibling && (end.nextSibling.nodeType === 3 || end.nextSibling.nodeName === "MARK")) end = end.nextSibling;
         const wrapper = document.createElement("span"); wrapper.className = "marklet-flex-wrapper"; p.insertBefore(wrapper, start);
         let curr = start; while (curr) { const next = curr.nextSibling; wrapper.appendChild(curr); if (curr === end) break; curr = next; }
-        processedParents.add(p);
+        wrappedParents.add(p);
       }
     });
     nodeData.forEach(({ node: n, start, end }) => {
       if (start >= end) return;
       const nr = document.createRange(); nr.setStart(n, start); nr.setEnd(n, end);
-      const m = document.createElement("mark"); m.className = "marklet-highlight"; m.style.cssText = `background-color: ${c} !important; color: ${textColor} !important;`; m.dataset.id = id;
+      const m = document.createElement("mark"); m.className = "marklet-highlight";
+      m.style.cssText = `background-color: ${c} !important; color: ${textColor} !important; padding: 1px 0 !important; cursor: pointer !important; display: inline !important; border: none !important; transition: transform 0.2s, background-color 0.1s !important;`;
+      m.dataset.id = id;
       try { m.appendChild(nr.extractContents()); nr.insertNode(m); } catch (e) {}
     });
   }
   getContrastColor(color) {
     if (!color) return "black";
+    let r, g, b;
     if (color.startsWith('rgb')) {
         const rgb = color.match(/\d+/g);
         if (rgb && rgb.length >= 3) {
-            return (parseInt(rgb[0]) * 299 + parseInt(rgb[1]) * 587 + parseInt(rgb[2]) * 114) / 1000 >= 128 ? "black" : "white";
-        }
-        return "black";
+            r = parseInt(rgb[0]); g = parseInt(rgb[1]); b = parseInt(rgb[2]);
+        } else return "black";
+    } else {
+        let h = color.replace("#", "");
+        if (h.length === 3) h = h.split("").map(x => x+x).join("");
+        r = parseInt(h.slice(0, 2), 16); g = parseInt(h.slice(2, 4), 16); b = parseInt(h.slice(4, 6), 16);
     }
-    let h = color.replace("#", ""); if (h.length === 3) h = h.split("").map(x => x+x).join("");
-    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
-    return (r * 299 + g * 587 + b * 114) / 1000 >= 128 ? "black" : "white";
+    return (r * 299 + g * 587 + b * 114) / 1000 >= CONSTANTS.BRIGHTNESS_THRESHOLD ? "black" : "white";
   }
   handleHighlightClick(e) {
     const t = e.target.closest(".marklet-highlight");
-    if (t) { const b = t.getBoundingClientRect(); this.app.ui.showEditToolbar(b.left + b.width / 2, b.top, t.dataset.id); e.stopPropagation(); }
+    if (t) {
+      const b = t.getBoundingClientRect();
+      this.app.ui.showEditToolbar(b.left + b.width / 2, b.top, t.dataset.id);
+      e.stopPropagation();
+    }
   }
   async deleteHighlight(id) {
     if (!SharedUtils.isValidExtension() || this.isProcessing) return;
-    this.isProcessing = true; this.app.pauseObserver();
+    this.isProcessing = true;
+    this.app.pauseObserver();
     try {
-      const d = await chrome.storage.local.get(["pages"]);
       const url = SharedUtils.normalizeUrl(window.location.href);
-      if (d.pages?.[url]) {
-        d.pages[url].highlights = d.pages[url].highlights.filter(h => h.id !== id);
-        if (d.pages[url].highlights.length === 0 && (!d.pages[url].drawings || d.pages[url].drawings.length === 0)) delete d.pages[url];
-        await chrome.storage.local.set({ pages: d.pages });
+      const page = await tinyIDB.get(url);
+      if (page) {
+        page.highlights = page.highlights.filter(h => h.id !== id);
+        if (page.highlights.length === 0 && (!page.drawings || page.drawings.length === 0)) await tinyIDB.remove(url);
+        else await tinyIDB.set(url, page);
         this.isProcessing = false;
-        this.loadHighlights();
+        await this.loadHighlights();
       } else {
         this.isProcessing = false;
       }
       this.app.ui.hideEditToolbar();
-    } catch (e) { console.error("Marklet:", e); this.isProcessing = false; } finally { this.app.updateObserverState(); }
+    } catch (e) {
+      console.error("Marklet:", e);
+      this.isProcessing = false;
+    } finally {
+      this.app.updateObserverState();
+    }
   }
-  previewColor(id, c) { document.querySelectorAll(`.marklet-highlight[data-id="${id}"]`).forEach(m => { m.style.backgroundColor = c; m.style.color = this.getContrastColor(c); }); }
+  previewColor(id, c) {
+    document.querySelectorAll(`.marklet-highlight[data-id="${id}"]`).forEach(m => {
+      m.style.backgroundColor = c;
+      m.style.color = this.getContrastColor(c);
+    });
+  }
   async changeColor(id, c) {
     if (!SharedUtils.isValidExtension() || this.isProcessing) return;
-    this.isProcessing = true; this.app.pauseObserver();
+    this.isProcessing = true;
+    this.app.pauseObserver();
     try {
-      const d = await chrome.storage.local.get(["pages"]);
       const url = SharedUtils.normalizeUrl(window.location.href);
-      const h = d.pages?.[url]?.highlights?.find(x => x.id === id);
+      const page = await tinyIDB.get(url);
+      const h = page?.highlights?.find(x => x.id === id);
       if (h) {
         h.color = c;
-        DOMUtils.stripHighlights();
-        const rangeRequests = d.pages[url].highlights.map(item => ({ id: item.id, range: DOMUtils.resolveRange(item.anchor), color: item.color, text: item.text })).filter(x => x.range);
-        const offsetMap = DOMUtils.getBatchGlobalOffsets(rangeRequests);
-        const intervals = rangeRequests.map(req => { const off = offsetMap.get(req.id); return off ? { start: off.start, end: off.end, color: req.color, text: req.text } : null; }).filter(Boolean);
-        await this.renderAndSave(this.mergeIntervals(intervals), d.pages, url);
-        this.app.ui.trackRecentColor(c); this.app.ui.hideEditToolbar();
+        await tinyIDB.set(url, page);
+        this.isProcessing = false;
+        await this.loadHighlights();
+        this.app.ui.trackRecentColor(c);
+        this.app.ui.hideEditToolbar();
       }
-    } catch (e) { console.error("Marklet:", e); this.loadHighlights(); } finally { this.isProcessing = false; this.app.updateObserverState(); }
+    } catch (e) {
+      console.error("Marklet:", e);
+      this.isProcessing = false;
+      this.loadHighlights();
+    } finally {
+      this.isProcessing = false;
+      this.app.updateObserverState();
+    }
   }
   gotoHighlight(id) {
     const el = document.querySelector(`.marklet-highlight[data-id="${id}"]`);
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       const marks = document.querySelectorAll(`.marklet-highlight[data-id="${id}"]`);
-      marks.forEach(m => { m.classList.remove("marklet-flash", "marklet-spotlight"); void m.offsetWidth; m.classList.add("marklet-spotlight"); });
-      setTimeout(() => marks.forEach(m => m.classList.remove("marklet-spotlight")), 2500);
+      marks.forEach(m => {
+        m.classList.remove("marklet-flash", "marklet-spotlight");
+        void m.offsetWidth;
+        m.classList.add("marklet-spotlight");
+      });
+      setTimeout(() => marks.forEach(m => m.classList.remove("marklet-spotlight")), CONSTANTS.SPOTLIGHT_DURATION);
     }
   }
 }

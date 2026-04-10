@@ -1,12 +1,14 @@
 const { describe, it, afterEach } = require('node:test');
 const assert = require('assert');
 const { Highlighter } = require('../content/highlighter.js');
+const { CONSTANTS } = require('../utils/consts.js');
 
+global.CONSTANTS = CONSTANTS;
 
 class MockHighlighter extends Highlighter {
     constructor() {
-        super({ ui: {}, pauseObserver: () => {}, resumeObserver: () => {} });
-        this.app = { ui: {}, pauseObserver: () => {}, resumeObserver: () => {} };
+        super({ ui: {}, pauseObserver: () => {}, resumeObserver: () => {}, isSavable: true });
+        this.app = { ui: {}, pauseObserver: () => {}, resumeObserver: () => {}, isSavable: true };
     }
     init() {} 
 }

@@ -7,6 +7,7 @@ describe('Whiteboard Shapes', () => {
     let whiteboard;
 
     beforeEach(async () => {
+        mockStorage.clear();
         document.body.innerHTML = '';
         chrome.storage.local.get = mock.fn((keys, callback) => {
              const res = { extensionEnabled: true, enableByDefault: true };

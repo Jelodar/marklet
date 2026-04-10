@@ -9,7 +9,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const highlightsList = document.getElementById('highlights-list');
   const highlightColorPicker = document.getElementById('default-highlight-color');
   const drawColorPicker = document.getElementById('default-draw-color');
-  const clearAllBtn = document.getElementById('clear-all-highlights');
+  const clearAllHighlightsBtn = document.getElementById('clear-all-highlights');
+  const clearAllDrawingsBtn = document.getElementById('clear-all-drawings');
   const selectionToolbarToggle = document.getElementById('selection-toolbar-toggle');
   const openSettingsBtn = document.getElementById('open-settings');
   const overrideSelectBtn = document.getElementById('override-select-btn');
@@ -20,11 +21,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   const highlightsVisibilityContainer = document.getElementById('highlights-visibility-container');
   const drawingsVisibilityContainer = document.getElementById('drawings-visibility-container');
   const selectionOverrideContainer = document.getElementById('selection-override-container');
+  const highlightsCountBadge = document.getElementById('highlights-count');
+  const drawingsCountBadge = document.getElementById('drawings-count');
+
+  const applyTheme = (theme) => {
+    if (theme === 'system') {
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    } else {
+      document.documentElement.setAttribute('data-theme', theme || 'light');
+    }
+  };
+
   openSettingsBtn.onclick = () => chrome.runtime.openOptionsPage();
   appTitleLabel.onclick = () => {
     extensionEnableToggle.checked = !extensionEnableToggle.checked;
     extensionEnableToggle.dispatchEvent(new Event('change'));
   };
+
   const safeSendMessage = (tabId, message, callback) => {
     if (!tabId) return;
     chrome.tabs.sendMessage(tabId, message, (response) => {
@@ -35,6 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   };
+
   const data = await chrome.storage.local.get([
     'extensionEnabled',
     'enableByDefault',
@@ -42,16 +57,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     'enabledSites',
     'highlightsVisible',
     'drawingsVisible',
-    'pages',
     'selectionToolbarEnabled',
     'defaultHighlightColor',
-    'defaultDrawColor'
+    'defaultDrawColor',
+    'theme'
   ]);
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  applyTheme(data.theme || 'system');
 
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const currentUrl = tab ? SharedUtils.normalizeUrl(tab.url) : null;
   const currentHostname = tab ? SharedUtils.getHostname(tab.url) : null;
+
+  if (tab) {
+    const isRestricted = SharedUtils.isRestricted(tab.url);
+    const isSavable = SharedUtils.isSavable(tab.url);
+
+    if (isRestricted) {
+      const hint = document.createElement('div');
+      hint.style.cssText = "background: var(--secondary-bg); color: var(--text-color); padding: 8px; border-radius: 4px; font-size: 11px; margin-bottom: 12px; border: 1px solid var(--border-color); opacity: 0.8;";
+      hint.innerHTML = "This page is restricted by the browser. Annotations are not possible here.";
+      document.body.insertBefore(hint, document.querySelector('.header').nextSibling);
+    } else if (!isSavable) {
+      const hint = document.createElement('div');
+      hint.style.cssText = "background: var(--secondary-bg); color: var(--text-color); padding: 8px; border-radius: 4px; font-size: 11px; margin-bottom: 12px; border: 1px solid var(--border-color); opacity: 0.8;";
+      hint.innerHTML = "This page type doesn't support saving. Your annotations will be lost on reload.";
+      document.body.insertBefore(hint, document.querySelector('.header').nextSibling);
+    }
+  }
+
 
   const isGlobalEnabled = data.extensionEnabled !== false;
   extensionEnableToggle.checked = isGlobalEnabled;
@@ -59,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const enableByDefault = data.enableByDefault !== false;
   let isSiteEnabled = false;
 
-  if (currentHostname) {
+  if (currentHostname && !SharedUtils.isRestricted(tab.url)) {
     if (enableByDefault) {
       isSiteEnabled = !(data.disabledSites || []).includes(currentHostname);
     } else {
@@ -67,8 +101,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     siteEnableLabel.textContent = `Enable on ${currentHostname}`;
     siteEnableToggle.disabled = false;
+  } else if (tab && !SharedUtils.isSavable(tab.url) && !SharedUtils.isRestricted(tab.url)) {
+    isSiteEnabled = isGlobalEnabled;
+    siteEnableLabel.textContent = "Enable on this Page";
+    siteEnableToggle.disabled = false;
   } else {
-    siteEnableLabel.textContent = "Enable on this Site";
+    siteEnableLabel.textContent = "Extension cannot run on this page";
     siteEnableToggle.disabled = true;
     siteEnableContainer.classList.add('disabled');
   }
@@ -81,6 +119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     parent.classList.add('flash-highlight');
     setTimeout(() => parent.classList.remove('flash-highlight'), 1000);
   };
+
   const setupDisabledClick = (container) => {
     container.addEventListener('click', (e) => {
       if (container.classList.contains('disabled') || container.querySelector('input:disabled') || container.querySelector('button:disabled')) {
@@ -115,9 +154,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   };
+
   [siteEnableContainer, whiteboardContainer, selectionToolbarContainer, defaultSettingsContainer, highlightsVisibilityContainer, drawingsVisibilityContainer, selectionOverrideContainer].forEach(setupDisabledClick);
+
   const updateControlsState = (globalEnabled, siteEnabled) => {
-    const fullyEnabled = globalEnabled && siteEnabled;
+    const isRestricted = tab && SharedUtils.isRestricted(tab.url);
+    const isPageUsable = globalEnabled && !isRestricted && (currentHostname || (tab && !SharedUtils.isSavable(tab.url)));
+    const fullyEnabled = globalEnabled && siteEnabled && !isRestricted;
+    
     const setDisabled = (container, isDisabled) => {
       if (!container) return;
       const inputs = container.querySelectorAll('input, button');
@@ -137,32 +181,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (container._disabledWrapper) container._disabledWrapper.style.display = 'none';
       }
     };
-    setDisabled(siteEnableContainer, !globalEnabled || !currentHostname);
+
+    setDisabled(siteEnableContainer, !isPageUsable);
     const subControlsDisabled = !fullyEnabled;
     [whiteboardContainer, selectionToolbarContainer, highlightsVisibilityContainer, drawingsVisibilityContainer, selectionOverrideContainer].forEach(c => setDisabled(c, subControlsDisabled));
-    const settingsInputs = defaultSettingsContainer.querySelectorAll('input');
-    settingsInputs.forEach(input => {
-      input.disabled = subControlsDisabled;
-      if (input._disabledWrapper) input._disabledWrapper.style.display = subControlsDisabled ? 'block' : 'none';
+    const settingsControls = defaultSettingsContainer.querySelectorAll('input, button');
+    settingsControls.forEach(control => {
+      control.disabled = subControlsDisabled;
+      if (control._disabledWrapper) control._disabledWrapper.style.display = subControlsDisabled ? 'block' : 'none';
     });
     defaultSettingsContainer.style.opacity = subControlsDisabled ? '0.5' : '1';
     highlightsList.style.opacity = fullyEnabled ? '1' : '0.5';
     highlightsList.style.pointerEvents = fullyEnabled ? 'auto' : 'none';
-    clearAllBtn.disabled = !fullyEnabled;
+    clearAllHighlightsBtn.disabled = !fullyEnabled;
+    clearAllDrawingsBtn.disabled = !fullyEnabled;
   };
+
   updateControlsState(isGlobalEnabled, isSiteEnabled);
   highlightsToggle.checked = data.highlightsVisible !== false;
   drawingsToggle.checked = data.drawingsVisible !== false;
   selectionToolbarToggle.checked = data.selectionToolbarEnabled !== false;
   if (data.defaultHighlightColor) highlightColorPicker.value = data.defaultHighlightColor;
   if (data.defaultDrawColor) drawColorPicker.value = data.defaultDrawColor;
+
   if (tab && isGlobalEnabled && isSiteEnabled) {
     await syncTabData(tab);
   }
-  const renderHighlights = (pages) => {
+
+  const renderHighlights = async () => {
     if (!tab || !currentUrl) return;
-    const pageData = (pages || {})[currentUrl] || { highlights: [] };
-    const pageHighlights = pageData.highlights || [];
+    const pageData = await tinyIDB.get(currentUrl);
+    const pageHighlights = pageData?.highlights || [];
+    const pageDrawings = pageData?.drawings || [];
+    
+    highlightsCountBadge.textContent = pageHighlights.length;
+    drawingsCountBadge.textContent = pageDrawings.length;
+
     if (pageHighlights.length > 0) {
       highlightsList.innerHTML = pageHighlights.map(h => `
         <div class="highlight-item" style="border-left: 4px solid ${h.color};">
@@ -187,17 +241,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       highlightsList.querySelectorAll('.btn-delete').forEach(btn => {
         btn.onclick = async () => {
-          const d = await chrome.storage.local.get(['pages']);
-          if (d.pages && d.pages[currentUrl]) {
-            d.pages[currentUrl].highlights = d.pages[currentUrl].highlights.filter(item => item.id !== btn.dataset.id);
-            await chrome.storage.local.set({ pages: d.pages });
-            renderHighlights(d.pages);
+          const pData = await tinyIDB.get(currentUrl);
+          if (pData) {
+            pData.highlights = pData.highlights.filter(item => item.id !== btn.dataset.id);
+            if (pData.highlights.length === 0 && (!pData.drawings || pData.drawings.length === 0)) await tinyIDB.remove(currentUrl);
+            else await tinyIDB.set(currentUrl, pData);
+            renderHighlights();
             safeSendMessage(tab.id, { type: 'LOAD_HIGHLIGHTS' });
           }
         };
       });
     } else {
-      highlightsList.innerHTML = '<div style="color: #999; text-align: center; padding: 10px;">No highlights yet</div>';
+      highlightsList.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 10px;">No highlights yet</div>`;
     }
   };
 
@@ -216,16 +271,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     overrideSelectBtn.textContent = (isEnabled ? 'Revert Text Selection Settings' : 'Make All Text Selectable');
   }
 
-  renderHighlights(data.pages);
+  renderHighlights();
+
   extensionEnableToggle.addEventListener('change', async (e) => {
     const enabled = e.target.checked;
     await chrome.storage.local.set({ extensionEnabled: enabled });
     updateControlsState(enabled, siteEnableToggle.checked);
     safeSendMessage(tab.id, { type: 'TOGGLE_EXTENSION', active: enabled });
   });
+
   siteEnableToggle.addEventListener('change', async (e) => {
-    if (!currentHostname) return;
     const enabled = e.target.checked;
+    if (!currentHostname) {
+      if (tab && !SharedUtils.isSavable(tab.url) && !SharedUtils.isRestricted(tab.url)) {
+        extensionEnableToggle.checked = enabled;
+        extensionEnableToggle.dispatchEvent(new Event('change'));
+      }
+      return;
+    }
     const d = await chrome.storage.local.get(['disabledSites', 'enabledSites', 'enableByDefault']);
     const isDefaultOn = d.enableByDefault !== false;
     if (isDefaultOn) {
@@ -249,46 +312,72 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateControlsState(globalEnabled, enabled);
     safeSendMessage(tab.id, { type: 'TOGGLE_SITE_ENABLED', active: enabled });
   });
+
   whiteboardToggle.addEventListener('change', async (e) => {
     const active = e.target.checked;
     safeSendMessage(tab.id, { type: 'TOGGLE_WHITEBOARD', active });
   });
+
   selectionToolbarToggle.addEventListener('change', async (e) => {
     const active = e.target.checked;
     await chrome.storage.local.set({ selectionToolbarEnabled: active });
     safeSendMessage(tab.id, { type: 'TOGGLE_SELECTION_TOOLBAR', active });
   });
+
   highlightsToggle.addEventListener('change', async (e) => {
     const active = e.target.checked;
     await chrome.storage.local.set({ highlightsVisible: active });
     safeSendMessage(tab.id, { type: 'TOGGLE_HIGHLIGHTS_VISIBILITY', active });
   });
+
   drawingsToggle.addEventListener('change', async (e) => {
     const active = e.target.checked;
     await chrome.storage.local.set({ drawingsVisible: active });
     safeSendMessage(tab.id, { type: 'TOGGLE_DRAWINGS_VISIBILITY', active });
   });
+
   highlightColorPicker.addEventListener('input', async (e) => {
     await chrome.storage.local.set({ defaultHighlightColor: e.target.value });
     safeSendMessage(tab.id, { type: 'LOAD_DEFAULT_COLORS' });
   });
+
   drawColorPicker.addEventListener('input', async (e) => {
     await chrome.storage.local.set({ defaultDrawColor: e.target.value });
     safeSendMessage(tab.id, { type: 'LOAD_DEFAULT_COLORS' });
   });
-  clearAllBtn.addEventListener('click', async () => {
+
+  clearAllHighlightsBtn.addEventListener('click', async () => {
     if (confirm('Clear all highlights on this page?')) {
-      const d = await chrome.storage.local.get(['pages']);
-      if (d.pages && d.pages[currentUrl]) {
-        d.pages[currentUrl].highlights = [];
-        await chrome.storage.local.set({ pages: d.pages });
-        renderHighlights(d.pages);
+      const pData = await tinyIDB.get(currentUrl);
+      if (pData) {
+        pData.highlights = [];
+        if (pData.drawings.length === 0) await tinyIDB.remove(currentUrl);
+        else await tinyIDB.set(currentUrl, pData);
+        renderHighlights();
         safeSendMessage(tab.id, { type: 'LOAD_HIGHLIGHTS' });
       }
     }
   });
+
+  clearAllDrawingsBtn.addEventListener('click', async () => {
+    if (confirm('Clear all drawings on this page?')) {
+      const pData = await tinyIDB.get(currentUrl);
+      if (pData) {
+        pData.drawings = [];
+        if (pData.highlights.length === 0) await tinyIDB.remove(currentUrl);
+        else await tinyIDB.set(currentUrl, pData);
+        renderHighlights();
+        safeSendMessage(tab.id, { type: 'CLEAR_DRAWINGS' });
+      }
+    }
+  });
+
   overrideSelectBtn.addEventListener('click', () => {
     safeSendMessage(tab.id, { type: 'TOGGLE_USER_SELECT' });
     syncTabData(tab)
+  });
+
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.theme) applyTheme(changes.theme.newValue);
   });
 });

@@ -1,67 +1,91 @@
 # Marklet
 
-Marklet is a professional-grade web annotation tool designed for research, documentation, and persistent knowledge management. It enables users to highlight text, create freehand drawings, and add annotations to any web page using a high-fidelity interface isolated within the Shadow DOM.
+**Marklet** is a professional-grade web annotation tool designed for research, documentation, and persistent knowledge management. It enables users to highlight text, create freehand drawings, and add annotations to any web page using a high-fidelity interface isolated within the Shadow DOM.
 
-Designed with a focus on privacy, performance, and stability, Marklet operates entirely within the local browser environment without external dependencies or data transmission.
+Designed with a focus on **privacy**, **performance**, and **stability**, Marklet operates entirely within your local browser environment with zero external dependencies.
+
+---
 
 ## Key Features
 
 ### Precision Highlighting
-*   **Robust Persistence**: Utilizes the native Range API and advanced DOM traversal to ensure highlights persist across page reloads and dynamic content updates.
-*   **Self-Healing Logic**: Automatically recovers and adjusts highlights when underlying page content shifts or updates, ensuring annotations remain accurate on dynamic timelines and applications.
+*   **Robust Persistence**: Utilizes advanced DOM traversal and coordinate mapping to ensure highlights persist across page reloads and dynamic content updates.
+*   **Deep Linking**: Generate robust `#:~:text=` Scroll-to-Text fragments. These links are context-aware (using prefix/suffix) and support long selections (`textStart,textEnd`), ensuring you always land on the exact spot.
+*   **Self-Healing Logic**: Automatically recovers and adjusts highlights when underlying page content shifts or updates.
 *   **Conflict Resolution**: Intelligently manages overlapping and nested highlights with a smart merging strategy.
+*   **Edit Toolbar**: Hover over any highlight to change colors, copy a direct link, or delete it.
 
 ### Infinite Whiteboard
-*   **Freehand Drawing**: Provides a responsive HTML5 Canvas layer for sketching, diagramming, and hand-written notes.
-*   **Vector-like Experience**: smooth paths and adjustable strokes for professional-quality annotations.
+*   **Dual-Layer Rendering**:
+    *   **Active Mode**: A `fixed` HTML5 Canvas layer provides a lag-free drawing experience optimized for high-performance sketching.
+    *   **Static Mode**: Automatically converts drawings to an `absolute` positioned SVG layer that scrolls naturally with the page content.
+*   **Smart Shapes**: Draw freehand or use dedicated tools for **Rectangles**, **Circles**, **Arrows**, and **Text**.
+*   **Text Annotations**: Seamlessly add text that perfectly matches the site's typography (font-family, weight, and smoothing).
+*   **Vector Fidelity**: High-quality paths with adjustable thickness, colors, and blend modes.
+*   **Undo/Redo**: Full history support for all whiteboard interactions.
+
+### Modernized Dashboard
+*   **Annotation Management**: A sleek, card-based settings dashboard to browse, search, and filter all your saved annotations.
+*   **Quick Actions**: Manage snippets directly from the dashboard—**Go to Highlight**, **Copy Text**, or **Delete** with a single click.
+*   **Visual Summaries**: Each page card shows a breakdown of highlights and the number of drawings present.
+*   **Customization**: Easily manage global settings, hotkeys, and color presets.
 
 ### Engineered for Performance
-*   **Adaptive Scheduling**: Implements a sophisticated scheduler with trailing debounce and throttling (2000ms - 8000ms intervals) to minimize main-thread impact on highly dynamic pages.
-*   **Zero-Overhead Idle**: Automatically suspends DOM observation when no annotations are present, ensuring zero resource usage on passive pages.
-*   **Shadow DOM Isolation**: UI components are fully encapsulated, preventing style leaks and conflicts with host page CSS.
+*   **Layout-Aware Caching**: Uses a `WeakMap` display cache to minimize layout-triggering `getComputedStyle` calls, preventing "font decoding" errors and lag on complex sites.
+*   **Adaptive Scheduling**: Implements a sophisticated scheduler with trailing debounce and throttling to minimize main-thread impact.
+*   **Zero-Overhead Idle**: Automatically suspends DOM observation when no annotations are present.
+*   **Shadow DOM Isolation**: UI components are fully encapsulated, preventing style leaks or conflicts with the host page.
 
 ### Privacy & Security
-*   **Local Storage**: All data is stored locally within the browser using the `chrome.storage` API. No data is ever sent to external servers.
-*   **Content Security Policy Compliant**: Designed to work within strict CSP environments.
+*   **100% Local**: All data is stored locally within the browser using IndexedDB and `chrome.storage`. No data ever leaves your machine.
+*   **CSP Compliant**: Fully compatible with strict Content Security Policy (CSP) environments; no inline scripts or unsafe evals.
+
+---
+
+## Usage & Hotkeys
+
+| Action | Shortcut |
+| :--- | :--- |
+| **Highlight Selection** | `Alt + H` |
+| **Toggle Whiteboard** | `Alt + Shift + W` |
+| **Undo Interaction** | `Ctrl + Z` |
+| **Redo Interaction** | `Ctrl + Y` |
+| **Delete Selected Stroke** | `Delete` / `Backspace` |
+
+---
 
 ## Installation
 
-1.  Clone the repository:
+1.  **Clone the repository**:
     ```bash
     git clone https://github.com/Jelodar/marklet.git
     ```
-2.  Navigate to `chrome://extensions` in your Chromium-based browser (Chrome, Edge, Brave).
-3.  Enable "Developer mode" in the top right corner.
-4.  Click "Load unpacked" and select the `marklet` directory.
+2.  **Load the Extension**:
+    *   Navigate to `chrome://extensions` in a Chromium browser (Chrome, Edge, Brave).
+    *   Enable **"Developer mode"** (top right).
+    *   Click **"Load unpacked"** and select the `marklet` directory.
 
-## Architecture
+---
 
-The project follows a modular, zero-dependency architecture using modern Vanilla JavaScript (ES6+).
+## Development & Architecture
+
+Marklet is built with modern **Vanilla JavaScript (ES6+)** and follows a modular, zero-dependency architecture.
 
 ### Core Modules
-
-*   **`marklet.js`**: The central controller managing the extension lifecycle, state persistence, and the adaptive mutation observer.
-*   **`highlighter.js`**: Handles complex DOM interaction, range normalization, and the highlight rendering engine.
-*   **`whiteboard.js`**: Manages the drawing canvas, stroke capture, and coordinate mapping.
-*   **`ui.js`**: Renders the floating toolbars and settings interface within the Shadow DOM.
-*   **`dom_utils.js`**: A specialized utility library for robust DOM traversal, XPath-like node resolution, and offset calculations.
-
-## Development
-
-The project includes a test suite using the native Node.js test runner.
-
-### Prerequisites
-*   Node.js v18+ (for running tests)
+- **`marklet.js`**: Central controller and extension lifecycle management.
+- **`highlighter.js`**: Complex DOM interaction and rendering engine.
+- **`whiteboard.js`**: Drawing canvas management and coordinate mapping.
+- **`ui.js`**: Encapsulated Shadow DOM interface and toolbars.
+- **`dom_utils.js`**: Robust traversal, node resolution, and text fragment generation.
 
 ### Running Tests
-Execute the test suite:
+The project uses the native Node.js test runner for comprehensive verification.
 ```bash
 npm test
 ```
 
-## Contributing
-Contributions are welcome. Please ensure all changes are covered by tests and follow the established code style (Vanilla JS, no external frameworks).
+---
 
 ## License
 
-Distributed under the ISC License.
+Distributed under the GNU GPL 3 License.

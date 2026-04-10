@@ -7,6 +7,7 @@ describe('Highlighter Restoration', () => {
     let highlighter;
 
     beforeEach(() => {
+        mockStorage.clear();
         document.body.innerHTML = '<div>Target Text</div><div>Another Text</div>';
         appMock = {
             shadowHost: document.createElement('div'),
@@ -14,7 +15,8 @@ describe('Highlighter Restoration', () => {
             pauseObserver: mock.fn(),
             resumeObserver: mock.fn(),
             updateObserverState: mock.fn(),
-            ui: { trackRecentColor: mock.fn(), hideSelectionToolbar: mock.fn() }
+            ui: { trackRecentColor: mock.fn(), hideSelectionToolbar: mock.fn() },
+            isSavable: true
         };
         highlighter = new Highlighter(appMock);
     });
@@ -24,7 +26,7 @@ describe('Highlighter Restoration', () => {
     });
 
     it('should restore highlight if text matches exactly', async () => {
-        const url = 'http://localhost';
+        const url = SharedUtils.normalizeUrl(window.location.href);
         const highlights = [{
             id: '1',
             url,
@@ -35,11 +37,7 @@ describe('Highlighter Restoration', () => {
             docLength: 20
         }];
 
-        chrome.storage.local.get = mock.fn((keys, cb) => {
-            const res = { pages: { [url]: { highlights } } };
-            if (cb) cb(res);
-            return Promise.resolve(res);
-        });
+        await tinyIDB.set(url, { highlights, url });
 
         await highlighter.loadHighlights();
 
@@ -51,7 +49,7 @@ describe('Highlighter Restoration', () => {
     it('should NOT restore highlight if text does not match stored text', async () => {
         document.body.innerHTML = '<div>Changed Text</div><div>Another Text</div>';
 
-        const url = 'http://localhost';
+        const url = SharedUtils.normalizeUrl(window.location.href);
         const highlights = [{
             id: '1',
             url,
@@ -62,11 +60,7 @@ describe('Highlighter Restoration', () => {
             docLength: 20
         }];
 
-        chrome.storage.local.get = mock.fn((keys, cb) => {
-            const res = { pages: { [url]: { highlights } } };
-            if (cb) cb(res);
-            return Promise.resolve(res);
-        });
+        await tinyIDB.set(url, { highlights, url });
 
         await highlighter.loadHighlights();
 
@@ -77,22 +71,18 @@ describe('Highlighter Restoration', () => {
     it('should restore highlight if text matches despite whitespace differences', async () => {
         document.body.innerHTML = '<div>  Target   Text  </div>';
 
-        const url = 'http://localhost';
+        const url = SharedUtils.normalizeUrl(window.location.href);
         const highlights = [{
             id: '1',
             url,
             color: '#FFFF00',
-            text: 'Target Text',
+            text: '  Target   Text  ',
             anchor: { startPath: 'DIV[0]/#text[0]', startOffset: 2, endPath: 'DIV[0]/#text[0]', endOffset: 15 },
             start: 2,
             docLength: 30
         }];
 
-        chrome.storage.local.get = mock.fn((keys, cb) => {
-            const res = { pages: { [url]: { highlights } } };
-            if (cb) cb(res);
-            return Promise.resolve(res);
-        });
+        await tinyIDB.set(url, { highlights, url });
 
         await highlighter.loadHighlights();
 
@@ -117,10 +107,6 @@ describe('Highlighter Restoration', () => {
         const originalGetBoundingClientRect = Range.prototype.getBoundingClientRect;
         Range.prototype.getBoundingClientRect = () => ({ left: 10, top: 10, width: 50, height: 20 });
 
-        
-        chrome.storage.local.get = mock.fn((keys) => Promise.resolve({ pages: {} }));
-        chrome.storage.local.set = mock.fn(() => Promise.resolve());
-
         try {
             await highlighter.applyHighlight(range, '#FF0000');
         } finally {
@@ -135,5 +121,46 @@ describe('Highlighter Restoration', () => {
         assert.ok(args[2], 'Should provide an ID');
 
         assert.strictEqual(appMock.ui.hideSelectionToolbar.mock.calls.length, 0, 'hideSelectionToolbar should not be called if edit toolbar is shown');
+    });
+});
+
+describe('Highlighter.isEditable', () => {
+    let highlighter;
+
+    beforeEach(() => {
+        highlighter = new Highlighter({ init: () => {}, shadow: {}, shadowHost: {}, pauseObserver: () => {}, resumeObserver: () => {}, updateObserverState: () => {}, ui: {} });
+    });
+
+    it('should identify normal input as editable', () => {
+        const input = document.createElement('input');
+        document.body.appendChild(input);
+        assert.strictEqual(highlighter.isEditable(input), true);
+        input.remove();
+    });
+
+    it('should identify readonly input as NOT editable when allowReadonly is true (default)', () => {
+        const input = document.createElement('input');
+        input.readOnly = true;
+        document.body.appendChild(input);
+        highlighter.allowReadonly = true;
+        assert.strictEqual(highlighter.isEditable(input), false);
+        input.remove();
+    });
+
+    it('should identify readonly input as editable when allowReadonly is false', () => {
+        const input = document.createElement('input');
+        input.readOnly = true;
+        document.body.appendChild(input);
+        highlighter.allowReadonly = false;
+        assert.strictEqual(highlighter.isEditable(input), true);
+        input.remove();
+    });
+
+    it('should identify contentEditable as editable', () => {
+        const div = document.createElement('div');
+        div.setAttribute('contenteditable', 'true');
+        document.body.appendChild(div);
+        assert.strictEqual(highlighter.isEditable(div), true);
+        div.remove();
     });
 });

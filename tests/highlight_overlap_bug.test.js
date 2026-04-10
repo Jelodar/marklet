@@ -1,26 +1,7 @@
+require('./test-setup.js');
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('assert');
-require('./test-setup.js');
 const { JSDOM } = require('jsdom');
-
-const storage = {};
-global.chrome.storage.local.get = async (keys) => {
-    if (!keys) return storage;
-    if (Array.isArray(keys)) {
-        const res = {};
-        keys.forEach(k => res[k] = storage[k]);
-        return res;
-    }
-    if (typeof keys === 'object') {
-        const res = {};
-        for (const k in keys) res[k] = storage[k] || keys[k];
-        return res;
-    }
-    return { [keys]: storage[keys] };
-};
-global.chrome.storage.local.set = async (items) => {
-    Object.assign(storage, items);
-};
 
 function setSelection(startNode, startOffset, endNode, endOffset) {
     const range = document.createRange();
@@ -39,7 +20,7 @@ describe('Bug Reproduction: Overlapping Highlights', () => {
     beforeEach(() => {
         document.body.innerHTML = 'He explained that he wanted all sides, including the movement';
         
-        for (const key in storage) delete storage[key];
+        mockStorage.clear();
 
         app = { 
             ui: { 
@@ -51,7 +32,8 @@ describe('Bug Reproduction: Overlapping Highlights', () => {
             pauseObserver: () => {},
             resumeObserver: () => {},
             updateObserverState: () => {},
-            shadowHost: document.createElement('div')
+            shadowHost: document.createElement('div'),
+            isSavable: true
         };
         highlighter = new Highlighter(app);
     });

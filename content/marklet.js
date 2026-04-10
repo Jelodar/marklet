@@ -1,5 +1,5 @@
 class Scheduler {
-  constructor(callback, wait = 2000, maxWait = 8000) {
+  constructor(callback, wait = CONSTANTS.SCHEDULER_WAIT, maxWait = CONSTANTS.SCHEDULER_MAX_WAIT) {
     this.callback = callback;
     this.wait = wait;
     this.maxWait = maxWait;
@@ -24,12 +24,25 @@ class Scheduler {
     this.maxTimer = null;
   }
 }
-
 class Marklet {
   constructor() {
     this.injectGlobalStyles();
     this.shadowHost = Object.assign(document.createElement("div"), { id: "marklet-root" });
-    document.body.appendChild(this.shadowHost);
+    Object.assign(this.shadowHost.style, {
+      position: "absolute",
+      top: "0",
+      left: "0",
+      width: "0",
+      height: "0",
+      margin: "0",
+      padding: "0",
+      border: "none",
+      overflow: "visible",
+      pointerEvents: "none",
+      zIndex: CONSTANTS.Z_INDEX_TOOLTIP,
+      all: "initial"
+    });
+    (document.documentElement || document.body).appendChild(this.shadowHost);
     this.shadow = this.shadowHost.attachShadow({ mode: "open" });
     this.initStyles();
     this.whiteboardActive = false;
@@ -39,6 +52,7 @@ class Marklet {
     this.observerPaused = true;
     this.bindMessageListener();
     this.destroyed = false;
+    this.isSavable = SharedUtils.isSavable(window.location.href);
     chrome.storage.local.get(["extensionEnabled", "enableByDefault", "disabledSites", "enabledSites"], (res) => {
       if (this.destroyed) return;
       if (!SharedUtils.isValidExtension()) return;
@@ -47,7 +61,9 @@ class Marklet {
       const hostname = window.location.hostname;
       const enableByDefault = res.enableByDefault !== false;
       let shouldInit = false;
-      if (enableByDefault) {
+      if (!this.isSavable) {
+        shouldInit = true;
+      } else if (enableByDefault) {
         shouldInit = !res.disabledSites?.includes(hostname);
       } else {
         shouldInit = res.enabledSites?.includes(hostname);
@@ -91,7 +107,21 @@ class Marklet {
     DOMUtils.stripHighlights();
     this.shadowHost.remove();
     this.shadowHost = Object.assign(document.createElement("div"), { id: "marklet-root" });
-    document.body.appendChild(this.shadowHost);
+    Object.assign(this.shadowHost.style, {
+      position: "absolute",
+      top: "0",
+      left: "0",
+      width: "0",
+      height: "0",
+      margin: "0",
+      padding: "0",
+      border: "none",
+      overflow: "visible",
+      pointerEvents: "none",
+      zIndex: CONSTANTS.Z_INDEX_TOOLTIP,
+      all: "initial"
+    });
+    (document.documentElement || document.body).appendChild(this.shadowHost);
     this.shadow = this.shadowHost.attachShadow({ mode: "open" });
     this.initStyles();
     if (this.keyListener) {
@@ -107,7 +137,7 @@ class Marklet {
       if (currentNormalized !== this.lastUrl) { this.lastUrl = currentNormalized; this.handleUrlChange(); }
     };
     window.addEventListener("popstate", check);
-    this.urlCheckInterval = setInterval(check, 2000);
+    this.urlCheckInterval = setInterval(check, CONSTANTS.URL_CHECK_INTERVAL);
   }
   handleUrlChange() {
     if (this.highlighter) this.highlighter.loadHighlights(true).then(() => this.updateObserverState());
@@ -116,19 +146,25 @@ class Marklet {
   async migrateData() {
     if (!SharedUtils.isValidExtension()) return;
     const d = await chrome.storage.local.get(["highlights", "drawings", "pages"]);
-    if (!d.pages && (d.highlights || d.drawings)) {
-      const pages = {};
+    if (!d.pages && !d.highlights && !d.drawings) return;
+
+    const pages = d.pages || {};
+    if (d.highlights || d.drawings) {
       [...(d.highlights || []), ...(d.drawings || [])].forEach((item) => {
         const url = SharedUtils.normalizeUrl(item.url);
         if (!pages[url]) pages[url] = { url, highlights: [], drawings: [] };
         (item.points) ? pages[url].drawings.push(item) : pages[url].highlights.push(item);
       });
-      await chrome.storage.local.set({ pages });
       await chrome.storage.local.remove(["highlights", "drawings"]);
     }
+
+    for (const [url, data] of Object.entries(pages)) {
+      await tinyIDB.set(url, data);
+    }
+    await chrome.storage.local.remove("pages");
   }
   initObserver() {
-    this.scheduler = new Scheduler(() => this.highlighter.loadHighlights(true), 2000, 8000);
+    this.scheduler = new Scheduler(() => this.highlighter.loadHighlights(true));
     this.observerCallback = (m) => {
       if (this.ui && this.ui.selectionTarget) {
         const isRemoved = !document.contains(this.ui.selectionTarget);
@@ -145,7 +181,7 @@ class Marklet {
         (n.nodeType === Node.TEXT_NODE && n.parentElement?.classList.contains("marklet-highlight"))
       ));
       if (isInternal) return;
-      if (this.whiteboardActive && this.whiteboard) {
+      if (this.whiteboard && (this.whiteboardActive || this.whiteboard.strokes.length > 0)) {
         requestAnimationFrame(() => this.whiteboard.handleResize());
       }
       if (!this.hasHighlights) return;
@@ -176,15 +212,32 @@ class Marklet {
   }
   initStyles() { this.shadow.appendChild(Object.assign(document.createElement("style"), { textContent: SHADOW_STYLES })); }
   injectGlobalStyles() {
-    if (document.getElementById("marklet-global-styles")) return;
-    document.head.appendChild(Object.assign(document.createElement("style"), {
-      id: "marklet-global-styles",
-      textContent: `.marklet-highlight { padding: 1px 0 !important; cursor: pointer !important; display: inline !important; border: none !important; transition: transform 0.2s, background-color 0.1s !important; } .marklet-rounded .marklet-highlight { border-radius: 3px; } .marklet-shadows .marklet-highlight { box-shadow: 0 1px 2px rgba(0,0,0,0.2); } .marklet-hidden-h .marklet-highlight { background-color: transparent !important; box-shadow: none !important; color: inherit !important; pointer-events: none; } .marklet-hidden-d #marklet-canvas-main { display: none !important; } .marklet-flash { transform: scale(1.05); box-shadow: 0 0 8px 2px #007bff !important; z-index: 10000; position: relative; outline: 2px solid #007bff; } .marklet-spotlight { position: relative; z-index: 2147483647 !important; animation: marklet-spotlight-effect 2.5s cubic-bezier(0.22, 1, 0.36, 1) forwards; } .marklet-text-input { position: absolute; background: transparent; border: 1px dashed #007bff; outline: none; padding: 0; margin: 0; resize: none; overflow: hidden; font-family: sans-serif; z-index: 2147483647; white-space: pre; min-width: 50px; line-height: 1; pointer-events: auto; } @keyframes marklet-spotlight-effect { 0% { box-shadow: 0 0 0 0 rgba(0,0,0,0); transform: scale(1); } 15% { box-shadow: 0 0 0 4px rgba(255,255,255,0.9), 0 0 0 100vmax rgba(0,0,0,0.6); transform: scale(1.1); } 30% { transform: scale(1.05); } 80% { box-shadow: 0 0 0 4px rgba(255,255,255,0), 0 0 0 100vmax rgba(0,0,0,0.6); transform: scale(1.05); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0), 0 0 0 0 rgba(0,0,0,0); transform: scale(1); } }`
-    }));
+    chrome.runtime.sendMessage({ type: "INJECT_GLOBAL_STYLES" });
   }
   bindMessageListener() {
     chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
       if (!SharedUtils.isValidExtension()) return;
+      if (m.type === "GET_HIGHLIGHTS") {
+        const url = SharedUtils.normalizeUrl(window.location.href);
+        tinyIDB.get(url).then(page => {
+          sendResponse({ highlights: page?.highlights || [] });
+        });
+        return true;
+      }
+      if (m.type === "CLEAR_HIGHLIGHTS") {
+        const url = SharedUtils.normalizeUrl(window.location.href);
+        tinyIDB.update(url, 'clear_highlights').then(() => {
+          this.highlighter.loadHighlights();
+          sendResponse({ success: true });
+        });
+        return true;
+      }
+      if (m.type === "PAGE_UPDATED_SYNC") {
+        if (SharedUtils.normalizeUrl(window.location.href) === m.url) {
+          if (this.highlighter) this.highlighter.loadHighlights(true).then(() => this.updateObserverState());
+          if (this.whiteboard) this.whiteboard.loadStrokes();
+        }
+      }
       if (m.type === "TOGGLE_EXTENSION") this.toggleExtension(m.active);
       if (m.type === "TOGGLE_SITE_ENABLED") this.toggleSiteEnabled(m.active);
       if (m.type === "TOGGLE_USER_SELECT") this.toggleUserSelect(m.active);

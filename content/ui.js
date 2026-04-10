@@ -6,23 +6,31 @@ class UI {
     this.root.append(this.absoluteContainer, this.container);
     this.recentColors = ["#FFFF00", "#FF4D4D", "#FF9800", "#4CAF50"];
     this.baseColors = ["#f44336", "#ff5722", "#ff9800", "#ffc107", "#ffeb3b", "#cddc39", "#8bc34a", "#4caf50", "#009688", "#00bcd4", "#03a9f4", "#2196f3", "#3f51b5", "#673ab7", "#9c27b0", "#e91e63", "#795548", "#5d4037", "#607d8b", "#455a64", "#9e9e9e", "#424242", "#000000", "#ffffff"];
+    this.originColors = [...this.baseColors];
+    this.pendingColor = "#FFFF00";
     this.init();
   }
   async init() {
     if (!SharedUtils.isValidExtension()) return;
-    const d = await chrome.storage.local.get(["baseColors"]);
+    const d = await chrome.storage.local.get(["baseColors", "originColors"]);
     if (d.baseColors) this.baseColors = d.baseColors;
+    if (d.originColors) this.originColors = d.originColors;
+    else this.originColors = [...this.baseColors];
     this.renderDock(); this.renderPalette(); this.loadCustomPresets(); this.loadRecentColors();
   }
   renderDock() {
     this.dock = document.createElement("div");
     this.dock.className = "dock";
-    this.dock.innerHTML = `<button class="dock-color-btn" title="Choose Color" id="btn-palette-dock"><div class="color-preview-btn" id="dock-color-prev"></div></button><button class="dock-btn" title="Select / Move (S)" id="btn-select">${ICONS.select}</button><button class="dock-btn" title="Draw (P)" id="btn-draw">${ICONS.pen}</button><button class="dock-btn" title="Rectangle (R)" id="btn-rect">${ICONS.rect}</button><button class="dock-btn" title="Circle (C)" id="btn-circle">${ICONS.circle}</button><button class="dock-btn" title="Arrow (A)" id="btn-arrow">${ICONS.arrow}</button><button class="dock-btn" title="Text (T)" id="btn-text">${ICONS.text}</button><button class="dock-btn" title="Eraser (E)" id="btn-erase">${ICONS.eraser}</button><button class="dock-btn" title="Clear All Drawings" id="btn-clear-draw-dock">${ICONS.trash}</button><div class="thickness-wrap"><input type="range" class="thickness-slider" id="stroke-thickness" min="1" max="20" value="5"></div><button class="dock-btn" title="Undo (Ctrl+Z)" id="btn-undo">${ICONS.undo}</button><button class="dock-btn" title="Redo (Ctrl+Y)" id="btn-redo" style="transform: scaleX(-1);">${ICONS.undo}</button><button class="dock-btn" title="Close Whiteboard" id="btn-exit-whiteboard">${ICONS.close}</button>`;
+    this.dock.innerHTML = `<button class="dock-color-btn" title="Choose Color" id="btn-palette-dock"><div class="color-preview-btn" id="dock-color-prev"></div></button><button class="dock-btn" title="Select / Move (S)" id="btn-select">${ICONS.select}</button><button class="dock-btn" title="Draw (P)" id="btn-draw">${ICONS.pen}</button><button class="dock-btn" title="Rectangle (R)" id="btn-rect">${ICONS.rect}</button><button class="dock-btn" title="Circle (C)" id="btn-circle">${ICONS.circle}</button><button class="dock-btn" title="Arrow (A)" id="btn-arrow">${ICONS.arrow}</button><button class="dock-btn" title="Text (T)" id="btn-text">${ICONS.text}</button><button class="dock-btn" title="Eraser (E)" id="btn-erase">${ICONS.eraser}</button><button class="dock-btn" title="Clear All Drawings" id="btn-clear-draw-dock">${ICONS.trash}</button><div class="thickness-wrap"><input type="range" class="thickness-slider" id="stroke-thickness" min="1" max="20" value="5"></div><div class="dock-sep"></div><div class="blend-wrap" title="Canvas Blend Mode"><span class="blend-text" id="dock-blend-text">Normal</span><select id="dock-blend-select" class="dock-select"><option value="normal">Normal</option><option value="multiply">Multiply</option><option value="screen">Screen</option><option value="overlay">Overlay</option><option value="darken">Darken</option><option value="lighten">Lighten</option><option value="color-dodge">Color Dodge</option><option value="color-burn">Color Burn</option><option value="hard-light">Hard Light</option><option value="soft-light">Soft Light</option><option value="difference">Difference</option><option value="exclusion">Exclusion</option><option value="hue">Hue</option><option value="saturation">Saturation</option><option value="color">Color</option><option value="luminosity">Luminosity</option></select></div><div class="dock-sep"></div><button class="dock-btn" title="Undo (Ctrl+Z)" id="btn-undo">${ICONS.undo}</button><button class="dock-btn" title="Redo (Ctrl+Y)" id="btn-redo">${ICONS.redo || ICONS.undo}</button><button class="dock-btn" title="Move Dock" id="btn-move-dock">${ICONS.left}</button><div class="dock-sep"></div><button class="dock-btn" title="Exit Whiteboard (Esc)" id="btn-exit-whiteboard">${ICONS.close}</button>`;
     this.container.appendChild(this.dock);
     this.updateDockColorPrev();
-    this.dock.onmousedown = (e) => { if (e.target.id !== "stroke-thickness") e.preventDefault(); };
+    this.dock.onmousedown = (e) => { if (e.target.id !== "stroke-thickness" && e.target.id !== "dock-blend-select") e.preventDefault(); };
     this.dock.querySelector("#btn-palette-dock").onclick = (e) => { e.stopPropagation(); this.togglePalette(undefined, e.currentTarget); };
     this.dock.querySelector("#btn-clear-draw-dock").onclick = (e) => { e.stopPropagation(); if (confirm("Clear all drawings on this page?")) this.app.whiteboard.clear(); };
+    const blendSelect = this.dock.querySelector("#dock-blend-select");
+    blendSelect.value = this.app.whiteboard.blendMode;
+    this.updateDockBlendText(this.app.whiteboard.blendMode);
+    blendSelect.onchange = (e) => { this.app.whiteboard.setBlendMode(e.target.value); this.updateDockBlendText(e.target.value); };
     ["select", "draw", "rect", "circle", "arrow", "text", "erase"].forEach(t => {
       const btn = this.dock.querySelector(`#btn-${t}`);
       if (btn) btn.onclick = () => this.setTool(t);
@@ -31,6 +39,25 @@ class UI {
     this.dock.querySelector("#btn-redo").onclick = () => this.app.whiteboard.redo();
     this.dock.querySelector("#btn-exit-whiteboard").onclick = () => { this.app.whiteboardActive = false; this.toggleWhiteboardMode(false); };
     this.dock.querySelector("#stroke-thickness").oninput = (e) => this.app.whiteboard.setThickness(parseInt(e.target.value));
+
+    const moveBtn = this.dock.querySelector("#btn-move-dock");
+    chrome.storage.local.get(["dockPosition"], (res) => {
+      if (res.dockPosition === "left") {
+        this.dock.classList.add("dock-left");
+        moveBtn.innerHTML = ICONS.right;
+      }
+    });
+    moveBtn.onclick = () => {
+      const isLeft = this.dock.classList.toggle("dock-left");
+      moveBtn.innerHTML = isLeft ? ICONS.right : ICONS.left;
+      chrome.storage.local.set({ dockPosition: isLeft ? "left" : "right" });
+      if (this.palette.classList.contains("visible")) this.togglePalette(false);
+    };
+  }
+  updateDockBlendText(m) {
+    if (!this.dock) return;
+    const el = this.dock.querySelector("#dock-blend-text");
+    if (el) el.textContent = m;
   }
   triggerKey(e) {
     if (!this.app.whiteboard.active) return;
@@ -128,6 +155,21 @@ class UI {
     this.updatePaletteDOM();
     this.palette.onmousedown = (e) => e.preventDefault();
   }
+  updatePendingColor(c) {
+    this.pendingColor = c;
+    const preview = this.palette.querySelector("#pal-prev");
+    const picker = this.palette.querySelector("#pal-picker");
+    if (preview) preview.style.backgroundColor = c;
+    if (picker) picker.value = this.rgbToHex(c);
+
+    if (this.paletteContext === "highlight") {
+      if (this.currentEditId) this.app.highlighter.previewColor(this.currentEditId, c);
+    } else if (this.paletteContext === "whiteboard" && this.app.whiteboard.selectedStroke) {
+      this.app.whiteboard.selectedStroke.color = c;
+      this.app.whiteboard.redraw();
+      this.updateDockColorPrev();
+    }
+  }
   updatePaletteDOM() {
     const base = this.baseColors, custom = this.customPresets || [];
     this.palette.innerHTML = `<div class="palette-header"><span class="palette-title">Colors</span><div class="color-preview" id="pal-prev"></div></div><div class="swatch-grid">${base.map((c, i) => `<div class="color-swatch" style="background:${c}" data-color="${c}" data-index="${i}"></div>`).join("")}${custom.length > 0 ? `<div class="preset-separator"></div>` + custom.map(c => `<div class="color-swatch" style="background:${c}" data-color="${c}"></div>`).join("") : ""}</div><div class="custom-row"><label id="custom-label"><input type="color" id="pal-picker" value="#ff0000"><span>Custom Color</span></label><button class="add-preset-btn" id="add-preset">Save Preset</button></div><div class="palette-footer"><button class="palette-btn cancel" id="pal-cancel">Cancel</button><button class="palette-btn ok" id="pal-ok">Apply</button></div>`;
@@ -136,30 +178,24 @@ class UI {
     const customLabel = this.palette.querySelector("#custom-label");
     const preview = this.palette.querySelector("#pal-prev");
 
-    const updatePending = (c) => {
-      this.pendingColor = c;
-      preview.style.backgroundColor = c;
-      if (this.paletteContext === "highlight") {
-        if (this.currentEditId) this.app.highlighter.previewColor(this.currentEditId, c);
-      } else if (this.paletteContext === "whiteboard" && this.app.whiteboard.selectedStroke) {
-        this.app.whiteboard.selectedStroke.color = c;
-        this.app.whiteboard.redraw();
-        this.updateDockColorPrev();
-      }
-    };
-
     preview.style.backgroundColor = this.pendingColor;
     picker.value = this.rgbToHex(this.pendingColor);
     const swatches = this.palette.querySelectorAll(".color-swatch");
 
     swatches.forEach(s => {
+      if (s.dataset.color.toLowerCase() === this.pendingColor.toLowerCase()) s.classList.add("active");
       s.onmousedown = (e) => {
+        if (e.button === 2) return;
         e.preventDefault();
         this.longPressed = false;
         this.longPressTimer = setTimeout(() => {
           this.showVarieties(s.dataset.color, s, s.dataset.index);
           this.longPressed = true;
-        }, 500);
+        }, CONSTANTS.LONG_PRESS_DURATION);
+      };
+      s.oncontextmenu = (e) => {
+        e.preventDefault();
+        this.showVarieties(s.dataset.color, s, s.dataset.index);
       };
       s.onmouseup = s.onmouseleave = () => {
         if (this.longPressTimer) clearTimeout(this.longPressTimer);
@@ -172,14 +208,14 @@ class UI {
         swatches.forEach(x => x.classList.remove("active"));
         customLabel.style.color = "";
         s.classList.add("active");
-        updatePending(s.dataset.color);
+        this.updatePendingColor(s.dataset.color);
       }
     };
     picker.onmousedown = () => { this.isPickingCustomColor = true; };
-    picker.oninput = (e) => { swatches.forEach(x => x.classList.remove("active")); customLabel.style.color = "#007bff"; updatePending(e.target.value); };
+    picker.oninput = (e) => { swatches.forEach(x => x.classList.remove("active")); customLabel.style.color = "#007bff"; this.updatePendingColor(e.target.value); };
     picker.onchange = () => {
       if (this.pickerTimer) clearTimeout(this.pickerTimer);
-      this.pickerTimer = setTimeout(() => this.isPickingCustomColor = false, 500);
+      this.pickerTimer = setTimeout(() => this.isPickingCustomColor = false, CONSTANTS.PICKER_DEBOUNCE);
     };
     this.palette.querySelector("#pal-ok").onclick = (e) => {
       if (!SharedUtils.isValidExtension()) return;
@@ -208,25 +244,37 @@ class UI {
   }
   showVarieties(color, target, index) {
     if (this.varietiesPopover) this.varietiesPopover.remove();
-    this.varietiesPopover = Object.assign(document.createElement("div"), { className: "varieties-popover", innerHTML: this.getColorVarieties(color).map(v => `<div class="variety-swatch" style="background:${v}" data-color="${v}"></div>`).join("") });
+    const origin = (index !== undefined) ? this.originColors[index] : color;
+    this.varietiesPopover = Object.assign(document.createElement("div"), { className: "varieties-popover", innerHTML: this.getColorVarieties(origin).map(v => `<div class="variety-swatch" style="background:${v}" data-color="${v}"></div>`).join("") });
     const rect = target.getBoundingClientRect(), popWidth = 178;
     let left = Math.max(10, Math.min(window.innerWidth - popWidth - 10, rect.left - popWidth / 2 + rect.width / 2)), top = Math.max(10, rect.top - 90);
     if (top < 10) top = rect.bottom + 10;
     Object.assign(this.varietiesPopover.style, { left: `${left}px`, top: `${top}px`, width: `${popWidth}px`, pointerEvents: "auto" });
-    this.varietiesPopover.onmousedown = (e) => e.preventDefault();
+    this.varietiesPopover.onmousedown = (e) => e.stopPropagation();
     this.varietiesPopover.onclick = (e) => {
       e.stopPropagation();
       const v = e.target.closest(".variety-swatch");
       if (v) {
-        const newColor = v.dataset.color; this.pendingColor = newColor; this.palette.querySelector("#pal-prev").style.backgroundColor = newColor;
-        if (this.paletteContext === "highlight" && this.currentEditId) this.app.highlighter.previewColor(this.currentEditId, newColor);
-        else if (this.paletteContext === "whiteboard" && this.app.whiteboard.selectedStroke) { this.app.whiteboard.selectedStroke.color = newColor; this.app.whiteboard.redraw(); this.updateDockColorPrev(); }
-        if (index !== undefined) { this.baseColors[index] = newColor; chrome.storage.local.set({ baseColors: this.baseColors }); this.updatePaletteDOM(); }
+        const newColor = v.dataset.color;
+        if (index !== undefined) {
+          this.baseColors[index] = newColor;
+          chrome.storage.local.set({ baseColors: this.baseColors, originColors: this.originColors });
+          this.updatePendingColor(newColor);
+          this.updatePaletteDOM();
+        } else {
+          this.updatePendingColor(newColor);
+          const swatches = this.palette.querySelectorAll(".color-swatch");
+          swatches.forEach(x => x.classList.remove("active"));
+          const picker = this.palette.querySelector("#pal-picker");
+          const customLabel = this.palette.querySelector("#custom-label");
+          if (picker) picker.value = this.rgbToHex(newColor);
+          if (customLabel) customLabel.style.color = "#007bff";
+        }
         this.varietiesPopover.remove(); this.varietiesPopover = null;
       }
     };
     this.container.appendChild(this.varietiesPopover);
-    const close = (e) => { if (this.varietiesPopover && !this.varietiesPopover.contains(e.target)) { this.varietiesPopover.remove(); this.varietiesPopover = null; document.removeEventListener("mousedown", close); } };
+    const close = (e) => { if (this.varietiesPopover && !e.composedPath().includes(this.varietiesPopover)) { this.varietiesPopover.remove(); this.varietiesPopover = null; document.removeEventListener("mousedown", close); } };
     setTimeout(() => document.addEventListener("mousedown", close), 10);
   }
   applyColor(c) {
@@ -275,7 +323,17 @@ class UI {
     this.palette.classList.toggle("visible", show);
   }
   toggleDock(v) { this.dock.style.display = v ? "flex" : "none"; }
-  toggleWhiteboardMode(a) { this.app.whiteboard.toggle(a); this.toggleDock(a); if (a) { this.app.toggleDrawingsVisibility(true); this.setTool("draw"); this.updateDockColorPrev(); } }
+  toggleWhiteboardMode(activate) {
+    this.app.whiteboard.toggle(activate);
+    this.toggleDock(activate);
+    if (activate) {
+      this.app.toggleDrawingsVisibility(true);
+      this.setTool("draw"); this.updateDockColorPrev();
+      if (!this.app.isSavable) {
+        setTimeout(() => this.showNotification("⚠️ This page type (blob/data/etc) doesn't support saving. Your annotations will be lost on reload."), 1000);
+      }
+    }
+  }
   showSelectionToolbar(x, y, r) {
     if (this.showToolbarTimer) clearTimeout(this.showToolbarTimer);
     this.showToolbarTimer = setTimeout(() => {
@@ -289,7 +347,7 @@ class UI {
       this.selToolbar.querySelector("#sel-more").onclick = (e) => { e.stopPropagation(); this.currentSelectionRange = r; this.togglePalette(true, e.currentTarget); };
       this.absoluteContainer.appendChild(this.selToolbar);
       requestAnimationFrame(() => { if (this.selToolbar) this.selToolbar.style.opacity = '1'; });
-    }, 50);
+    }, CONSTANTS.TOOLBAR_DEBOUNCE);
   }
   hideSelectionToolbar() {
     if (this.showToolbarTimer) clearTimeout(this.showToolbarTimer);
@@ -305,12 +363,26 @@ class UI {
       this.editToolbar.onmousedown = (e) => e.preventDefault();
       const btnTrash = Object.assign(document.createElement("button"), { className: "tool-btn", innerHTML: ICONS.trash, onclick: (e) => { e.stopPropagation(); this.app.highlighter.deleteHighlight(id); } }); btnTrash.style.color = "var(--mk-danger)";
       this.editToolbar.appendChild(btnTrash);
+      const btnLink = Object.assign(document.createElement("button"), { className: "tool-btn", innerHTML: ICONS.link, title: "Copy Highlight URL", onclick: (e) => {
+          e.stopPropagation();
+          const mark = document.querySelector(`.marklet-highlight[data-id="${id}"]`);
+          if (mark) {
+              const range = document.createRange(); range.selectNodeContents(mark);
+              const url = window.location.origin + window.location.pathname + window.location.search + DOMUtils.getTextFragment(range);
+              navigator.clipboard.writeText(url).then(() => {
+                  const original = btnLink.innerHTML; btnLink.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`;
+                  setTimeout(() => btnLink.innerHTML = original, 2000);
+                  this.showNotification("Link copied to clipboard!");
+              });
+          }
+      } });
+      this.editToolbar.appendChild(btnLink);
       this.recentColors.forEach(c => this.editToolbar.appendChild(Object.assign(document.createElement("button"), { className: "tool-btn color-dot edit-color-dot", style: `background:${c}`, onclick: (e) => { e.stopPropagation(); this.app.highlighter.changeColor(id, c); } })));
       this.editToolbar.appendChild(Object.assign(document.createElement("button"), { className: "tool-btn", innerHTML: ICONS.palette, onclick: (e) => { e.stopPropagation(); const mark = document.querySelector(`.marklet-highlight[data-id="${id}"]`); if (mark) this.originalColor = mark.style.backgroundColor; this.currentEditId = id; this.togglePalette(true, e.currentTarget); } }));
       this.editToolbar.appendChild(Object.assign(document.createElement("button"), { className: "tool-btn", innerHTML: ICONS.close, onclick: (e) => { e.stopPropagation(); this.hideEditToolbar(); } }));
       this.absoluteContainer.appendChild(this.editToolbar);
       requestAnimationFrame(() => { if (this.editToolbar) this.editToolbar.style.opacity = '1'; });
-    }, 50);
+    }, CONSTANTS.TOOLBAR_DEBOUNCE);
   }
   hideEditToolbar() {
     if (this.showEditTimer) clearTimeout(this.showEditTimer);
@@ -333,24 +405,20 @@ class UI {
   showNotification(msg) {
     if (this.notificationTimer) clearTimeout(this.notificationTimer);
     if (this.notificationRemoveTimer) clearTimeout(this.notificationRemoveTimer);
-
     let toast = this.container.querySelector('.toast');
-    
     if (!toast) {
-      toast = Object.assign(document.createElement("div"), { textContent: msg, className: 'toast' })
+      toast = Object.assign(document.createElement("div"), { textContent: msg, className: 'toast' });
       this.container.appendChild(toast);
-    }else{
+    } else {
       toast.textContent = msg;
     }
-
     requestAnimationFrame(() => toast.style.opacity = "1");
     this.notificationTimer = setTimeout(() => {
       toast.style.opacity = "0";
-      this.notificationRemoveTimer = setTimeout(() => toast.remove(), 200);
-    }, 2000);
+      this.notificationRemoveTimer = setTimeout(() => toast.remove(), CONSTANTS.TRANSITION_DURATION);
+    }, CONSTANTS.NOTIFICATION_DURATION);
   }
 }
-
 if (typeof module !== 'undefined') {
   module.exports = { UI };
 }

@@ -7,9 +7,11 @@ describe('Highlighter Rendering & Utilities', () => {
     let appMock;
 
     beforeEach(() => {
+        mockStorage.clear();
         appMock = {
             shadowHost: document.createElement('div'),
             hasHighlights: false,
+            isSavable: true,
             pauseObserver: mock.fn(),
             resumeObserver: mock.fn(),
             updateObserverState: mock.fn(),
@@ -46,47 +48,38 @@ describe('Highlighter Rendering & Utilities', () => {
     });
 
     it('should change color of existing highlight', async () => {
-        document.body.innerHTML = 'Test';
-        const url = 'http://localhost';
+        document.body.innerHTML = '<div>Test</div>';
+        const url = SharedUtils.normalizeUrl(window.location.href);
         const h = {
             id: '1', url, color: '#FFFF00', text: 'Test',
-            anchor: { startPath: '#text[0]', startOffset: 0, endPath: '#text[0]', endOffset: 4 },
+            anchor: { startPath: 'DIV[0]/#text[0]', startOffset: 0, endPath: 'DIV[0]/#text[0]', endOffset: 4 },
             start: 0
         };
-        
-        chrome.storage.local.get = mock.fn((keys, cb) => {
-            const res = { pages: { [url]: { highlights: [h] } } };
-            return Promise.resolve(res);
-        });
-        
-        const setSpy = mock.method(chrome.storage.local, 'set');
-        
+
+        await tinyIDB.set(url, { highlights: [h], url });
+
         await highlighter.changeColor('1', '#FF0000');
-        
-        assert.strictEqual(setSpy.mock.calls.length, 1);
-        const args = setSpy.mock.calls[0].arguments[0];
-        assert.strictEqual(args.pages[url].highlights[0].color, '#FF0000');
+
+        const page = await tinyIDB.get(url);
+        assert.ok(page, 'Page should exist');
+        assert.ok(page.highlights.length > 0, 'Highlights should exist');
+        assert.strictEqual(page.highlights[0].color, '#FF0000');
     });
 
     it('should delete highlight', async () => {
-        const url = 'http://localhost';
+        document.body.innerHTML = '<div>Test</div>';
+        const url = SharedUtils.normalizeUrl(window.location.href);
         const h = {
             id: '1', url, color: '#FFFF00', text: 'Test',
-            anchor: { startPath: '#text[0]', startOffset: 0, endPath: '#text[0]', endOffset: 4 },
+            anchor: { startPath: '/div[1]/text()[1]', startOffset: 0, endPath: '/div[1]/text()[1]', endOffset: 4 },
             start: 0
         };
         
-        chrome.storage.local.get = mock.fn((keys, cb) => {
-            const res = { pages: { [url]: { highlights: [h] } } };
-            return Promise.resolve(res);
-        });
-        
-        const setSpy = mock.method(chrome.storage.local, 'set');
+        await tinyIDB.set(url, { highlights: [h], url });
         
         await highlighter.deleteHighlight('1');
         
-        assert.strictEqual(setSpy.mock.calls.length, 1);
-        const args = setSpy.mock.calls[0].arguments[0];
-        assert.strictEqual(args.pages[url], undefined);
+        const page = await tinyIDB.get(url);
+        assert.ok(!page || page.highlights.length === 0);
     });
 });

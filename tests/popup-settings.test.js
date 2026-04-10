@@ -23,6 +23,9 @@ describe('Popup Logic', () => {
             <input type="color" id="default-highlight-color">
             <input type="color" id="default-draw-color">
             <button id="clear-all-highlights"></button>
+            <button id="clear-all-drawings"></button>
+            <span id="highlights-count"></span>
+            <span id="drawings-count"></span>
             <div id="selection-toolbar-container"><input type="checkbox" id="selection-toolbar-toggle"></div>
             <button id="open-settings"></button>
             <div id="selection-override-container"><button id="override-select-btn"></button></div>
@@ -93,6 +96,7 @@ describe('Settings Logic', () => {
             <select id="theme-select"><option value="system">System</option><option value="light">Light</option></select>
             <input type="checkbox" id="shadows-toggle">
             <input type="checkbox" id="rounded-toggle">
+            <input type="checkbox" id="readonly-highlight-toggle">
             <input type="checkbox" id="toolbar-toggle">
             <input type="color" id="default-highlight-color">
             <input type="color" id="default-draw-color">
@@ -101,6 +105,7 @@ describe('Settings Logic', () => {
             <select id="blend-mode-select"><option value="normal">Normal</option></select>
             <div id="disabled-sites-list-container"><h2></h2><div id="disabled-sites-list"></div></div>
             <div id="pages-list"></div>
+            <div id="pagination"></div>
             <input type="text" id="page-search">
             <button id="export-btn"></button>
             <button id="import-btn"></button>
