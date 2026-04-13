@@ -1,6 +1,6 @@
 {
   "name": "marklet",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Highlight and annotate web pages with marker-style overlays and freehand drawings.",
   "main": "background.js",
   "scripts": {

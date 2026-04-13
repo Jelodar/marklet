@@ -21,7 +21,7 @@ class UI {
   renderDock() {
     this.dock = document.createElement("div");
     this.dock.className = "dock";
-    this.dock.innerHTML = `<button class="dock-color-btn" title="Choose Color" id="btn-palette-dock"><div class="color-preview-btn" id="dock-color-prev"></div></button><button class="dock-btn" title="Select / Move (S)" id="btn-select">${ICONS.select}</button><button class="dock-btn" title="Draw (P)" id="btn-draw">${ICONS.pen}</button><button class="dock-btn" title="Rectangle (R)" id="btn-rect">${ICONS.rect}</button><button class="dock-btn" title="Circle (C)" id="btn-circle">${ICONS.circle}</button><button class="dock-btn" title="Arrow (A)" id="btn-arrow">${ICONS.arrow}</button><button class="dock-btn" title="Text (T)" id="btn-text">${ICONS.text}</button><button class="dock-btn" title="Eraser (E)" id="btn-erase">${ICONS.eraser}</button><button class="dock-btn" title="Clear All Drawings" id="btn-clear-draw-dock">${ICONS.trash}</button><div class="thickness-wrap"><input type="range" class="thickness-slider" id="stroke-thickness" min="1" max="20" value="5"></div><div class="dock-sep"></div><div class="blend-wrap" title="Canvas Blend Mode"><span class="blend-text" id="dock-blend-text">Normal</span><select id="dock-blend-select" class="dock-select"><option value="normal">Normal</option><option value="multiply">Multiply</option><option value="screen">Screen</option><option value="overlay">Overlay</option><option value="darken">Darken</option><option value="lighten">Lighten</option><option value="color-dodge">Color Dodge</option><option value="color-burn">Color Burn</option><option value="hard-light">Hard Light</option><option value="soft-light">Soft Light</option><option value="difference">Difference</option><option value="exclusion">Exclusion</option><option value="hue">Hue</option><option value="saturation">Saturation</option><option value="color">Color</option><option value="luminosity">Luminosity</option></select></div><div class="dock-sep"></div><button class="dock-btn" title="Undo (Ctrl+Z)" id="btn-undo">${ICONS.undo}</button><button class="dock-btn" title="Redo (Ctrl+Y)" id="btn-redo">${ICONS.redo || ICONS.undo}</button><button class="dock-btn" title="Move Dock" id="btn-move-dock">${ICONS.left}</button><div class="dock-sep"></div><button class="dock-btn" title="Exit Whiteboard (Esc)" id="btn-exit-whiteboard">${ICONS.close}</button>`;
+    this.dock.innerHTML = `<button class="dock-color-btn" title="Choose Color" id="btn-palette-dock"><div class="color-preview-btn" id="dock-color-prev"></div></button><button class="dock-btn" title="Select / Move (S)" id="btn-select">${ICONS.select}</button><button class="dock-btn" title="Draw (P)" id="btn-draw">${ICONS.pen}</button><button class="dock-btn" title="Rectangle (R)" id="btn-rect">${ICONS.rect}</button><button class="dock-btn" title="Circle (C)" id="btn-circle">${ICONS.circle}</button><button class="dock-btn" title="Arrow (A)" id="btn-arrow">${ICONS.arrow}</button><button class="dock-btn" title="Text (T)" id="btn-text">${ICONS.text}</button><button class="dock-btn" title="Eraser (E)" id="btn-erase">${ICONS.eraser}</button><button class="dock-btn" title="Clear All Drawings" id="btn-clear-draw-dock">${ICONS.trash}</button><div class="thickness-wrap"><input type="range" class="thickness-slider" id="stroke-thickness" min="1" max="20" value="5"></div><div class="dock-sep"></div><div class="blend-wrap" title="Canvas Blend Mode"><span class="blend-text" id="dock-blend-text">Normal</span><select id="dock-blend-select" class="dock-select"><option value="normal">Normal</option><option value="multiply">Multiply</option><option value="screen">Screen</option><option value="overlay">Overlay</option><option value="darken">Darken</option><option value="lighten">Lighten</option><option value="color-dodge">Color Dodge</option><option value="color-burn">Color Burn</option><option value="hard-light">Hard Light</option><option value="soft-light">Soft Light</option><option value="difference">Difference</option><option value="exclusion">Exclusion</option><option value="hue">Hue</option><option value="saturation">Saturation</option><option value="color">Color</option><option value="luminosity">Luminosity</option></select></div><div class="dock-sep"></div><button class="dock-btn" title="Undo (Ctrl+Z)" id="btn-undo">${ICONS.undo}</button><button class="dock-btn" title="Redo (Ctrl+Y)" id="btn-redo">${ICONS.redo || ICONS.undo}</button><button class="dock-btn" title="Move Dock (M)" id="btn-move-dock">${ICONS.left}</button><div class="dock-sep"></div><button class="dock-btn" title="Exit Whiteboard (Esc)" id="btn-exit-whiteboard">${ICONS.close}</button>`;
     this.container.appendChild(this.dock);
     this.updateDockColorPrev();
     this.dock.onmousedown = (e) => { if (e.target.id !== "stroke-thickness" && e.target.id !== "dock-blend-select") e.preventDefault(); };
@@ -84,6 +84,8 @@ class UI {
       const t = { s: "select", p: "draw", r: "rect", c: "circle", a: "arrow", e: "erase", t: "text" }[e.key.toLowerCase()];
       if (t) {
         this.setTool(t);
+      } else if (e.key.toLowerCase() === "m") {
+        this.dock.querySelector("#btn-move-dock").click();
       }
     }
   }
@@ -336,22 +338,37 @@ class UI {
   }
   showSelectionToolbar(x, y, r) {
     if (this.showToolbarTimer) clearTimeout(this.showToolbarTimer);
+    const text = r.toString();
+    if (this.selToolbar && this.selectionTarget === r.commonAncestorContainer && this.lastSelectionText === text) return;
     this.showToolbarTimer = setTimeout(() => {
+      if (this.selToolbar && this.selectionTarget === r.commonAncestorContainer && this.lastSelectionText === text) return;
       if (this.selToolbar) this.selToolbar.remove();
       this.hideEditToolbar();
       this.selectionTarget = r.commonAncestorContainer;
+      this.lastSelectionText = text;
       this.selToolbar = Object.assign(document.createElement("div"), { className: "selection-toolbar", innerHTML: this.recentColors.map(c => `<button class="tool-btn color-dot" style="background:${c}" data-color="${c}"></button>`).join("") + `<button class="tool-btn" id="sel-more">${ICONS.palette}</button>` });
-      Object.assign(this.selToolbar.style, { left: `${Math.min(x + window.scrollX, document.documentElement.scrollWidth - 180)}px`, top: `${Math.max(10, y + window.scrollY - 50)}px`, opacity: '0', transition: 'opacity 0.1s' });
+      Object.assign(this.selToolbar.style, {
+          left: `${Math.min(x + window.scrollX, document.documentElement.scrollWidth - 180)}px`,
+          top: `${Math.max(10, y + window.scrollY - 50)}px`,
+          opacity: '0',
+          transform: 'scale(0.95)',
+          transition: 'opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+      });
       this.selToolbar.onmousedown = (e) => e.preventDefault();
       this.selToolbar.querySelectorAll(".color-dot").forEach(b => b.onclick = (e) => { e.stopPropagation(); this.app.highlighter.applyHighlight(r, b.dataset.color, true); });
       this.selToolbar.querySelector("#sel-more").onclick = (e) => { e.stopPropagation(); this.currentSelectionRange = r; this.togglePalette(true, e.currentTarget); };
       this.absoluteContainer.appendChild(this.selToolbar);
-      requestAnimationFrame(() => { if (this.selToolbar) this.selToolbar.style.opacity = '1'; });
+      requestAnimationFrame(() => {
+          if (this.selToolbar) {
+              this.selToolbar.style.opacity = '1';
+              this.selToolbar.style.transform = 'scale(1)';
+          }
+      });
     }, CONSTANTS.TOOLBAR_DEBOUNCE);
   }
   hideSelectionToolbar() {
     if (this.showToolbarTimer) clearTimeout(this.showToolbarTimer);
-    if (this.selToolbar) { this.selToolbar.remove(); this.selToolbar = null; this.selectionTarget = null; }
+    if (this.selToolbar) { this.selToolbar.remove(); this.selToolbar = null; this.selectionTarget = null; this.lastSelectionText = null; }
   }
   showEditToolbar(x, y, id) {
     if (this.showEditTimer) clearTimeout(this.showEditTimer);
@@ -359,7 +376,13 @@ class UI {
       if (this.editToolbar) this.editToolbar.remove();
       this.selectionTarget = document.querySelector(`.marklet-highlight[data-id="${id}"]`);
       this.editToolbar = Object.assign(document.createElement("div"), { className: "edit-toolbar" });
-      Object.assign(this.editToolbar.style, { left: `${Math.min(x + window.scrollX, document.documentElement.scrollWidth - 220)}px`, top: `${Math.max(10, y + window.scrollY - 50)}px`, opacity: '0', transition: 'opacity 0.1s' });
+      Object.assign(this.editToolbar.style, {
+          left: `${Math.min(x + window.scrollX, document.documentElement.scrollWidth - 220)}px`,
+          top: `${Math.max(10, y + window.scrollY - 50)}px`,
+          opacity: '0',
+          transform: 'scale(0.95)',
+          transition: 'opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+      });
       this.editToolbar.onmousedown = (e) => e.preventDefault();
       const btnTrash = Object.assign(document.createElement("button"), { className: "tool-btn", innerHTML: ICONS.trash, onclick: (e) => { e.stopPropagation(); this.app.highlighter.deleteHighlight(id); } }); btnTrash.style.color = "var(--mk-danger)";
       this.editToolbar.appendChild(btnTrash);
@@ -381,7 +404,12 @@ class UI {
       this.editToolbar.appendChild(Object.assign(document.createElement("button"), { className: "tool-btn", innerHTML: ICONS.palette, onclick: (e) => { e.stopPropagation(); const mark = document.querySelector(`.marklet-highlight[data-id="${id}"]`); if (mark) this.originalColor = mark.style.backgroundColor; this.currentEditId = id; this.togglePalette(true, e.currentTarget); } }));
       this.editToolbar.appendChild(Object.assign(document.createElement("button"), { className: "tool-btn", innerHTML: ICONS.close, onclick: (e) => { e.stopPropagation(); this.hideEditToolbar(); } }));
       this.absoluteContainer.appendChild(this.editToolbar);
-      requestAnimationFrame(() => { if (this.editToolbar) this.editToolbar.style.opacity = '1'; });
+      requestAnimationFrame(() => {
+          if (this.editToolbar) {
+              this.editToolbar.style.opacity = '1';
+              this.editToolbar.style.transform = 'scale(1)';
+          }
+      });
     }, CONSTANTS.TOOLBAR_DEBOUNCE);
   }
   hideEditToolbar() {
@@ -392,7 +420,13 @@ class UI {
     if (this.drawToolbar) this.drawToolbar.remove();
     this.drawToolbar = Object.assign(document.createElement("div"), { className: "edit-toolbar" });
     const b = this.app.whiteboard.getBounds(s), p = this.app.whiteboard.getSelectionPadding(s);
-    Object.assign(this.drawToolbar.style, { left: `${Math.min(Math.max(10, b.cx - 110), document.documentElement.scrollWidth - 230)}px`, top: `${Math.max(10, b.minY - p - 90)}px` });
+    Object.assign(this.drawToolbar.style, {
+        left: `${Math.min(Math.max(10, b.cx - 110), document.documentElement.scrollWidth - 230)}px`,
+        top: `${Math.max(10, b.minY - p - 90)}px`,
+        opacity: '0',
+        transform: 'scale(0.95)',
+        transition: 'opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+    });
     this.drawToolbar.onmousedown = (e) => e.preventDefault();
     this.drawToolbar.innerHTML = `<button class="tool-btn" id="draw-trash" style="color:var(--mk-danger)">${ICONS.trash}</button>${this.recentColors.map(c => `<button class="tool-btn color-dot draw-color-dot" style="background:${c}" data-color="${c}"></button>`).join("")}<button class="tool-btn" id="draw-palette">${ICONS.palette}</button><button class="tool-btn" id="draw-close">${ICONS.close}</button>`;
     this.drawToolbar.querySelectorAll(".draw-color-dot").forEach(b => b.onclick = (e) => { e.stopPropagation(); this.app.whiteboard.setColor(b.dataset.color); });
@@ -400,6 +434,12 @@ class UI {
     this.drawToolbar.querySelector("#draw-trash").onclick = (e) => { e.stopPropagation(); const wb = this.app.whiteboard; if (wb.selectedStroke) { wb.strokes = wb.strokes.filter(st => st !== wb.selectedStroke); wb.selectedStroke = null; wb.redraw(); wb.saveStrokes(); this.hideDrawingToolbar(); } };
     this.drawToolbar.querySelector("#draw-close").onclick = () => this.hideDrawingToolbar();
     this.absoluteContainer.appendChild(this.drawToolbar);
+    requestAnimationFrame(() => {
+        if (this.drawToolbar) {
+            this.drawToolbar.style.opacity = '1';
+            this.drawToolbar.style.transform = 'scale(1)';
+        }
+    });
   }
   hideDrawingToolbar() { if (this.drawToolbar) { this.drawToolbar.remove(); this.drawToolbar = null; } }
   showNotification(msg) {

@@ -235,14 +235,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
             Enter: 'Enter', Tab: 'Tab', Escape: 'Esc', Backspace: 'Backspace', Delete: 'Delete'
         };
-        let char = e.code.replace(/^Key/, "").replace(/^Digit/, "");
+        let char = (e.code || e.key || "").replace(/^Key/, "").replace(/^Digit/, "");
         if (codeMap[char]) {
             char = codeMap[char];
-        } else if (codeMap[e.code]) {
+        } else if (e.code && codeMap[e.code]) {
             char = codeMap[e.code];
-        } else {
-            if (char.length > 1 && !codeMap[char] && !codeMap[e.code]) {
-            }
+        } else if (e.key && codeMap[e.key]) {
+            char = codeMap[e.key];
         }
         if (char.length === 1) char = char.toUpperCase();
         parts.push(char);

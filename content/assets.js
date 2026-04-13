@@ -104,7 +104,7 @@ const SHADOW_STYLES = `
   @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .variety-swatch { width: 28px; height: 28px; border-radius: 6px; cursor: pointer; border: 1px solid rgba(0,0,0,0.05); transition: transform 0.1s; }
   .variety-swatch:hover { transform: scale(1.1); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-  .selection-toolbar, .edit-toolbar { position: absolute; background: var(--mk-bg-light); backdrop-filter: var(--mk-backdrop); border-radius: var(--mk-radius); padding: 6px; display: flex; gap: 6px; pointer-events: auto; box-shadow: var(--mk-shadow); border: 1px solid var(--mk-border-light); z-index: var(--mk-z-toolbar); align-items: center; }
+  .selection-toolbar, .edit-toolbar { position: absolute; background: var(--mk-bg-light); backdrop-filter: var(--mk-backdrop); border-radius: var(--mk-radius); padding: 6px; display: flex; gap: 6px; pointer-events: auto; box-shadow: var(--mk-shadow); border: 1px solid var(--mk-border-light); z-index: var(--mk-z-toolbar); align-items: center; transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
   .tool-btn { width: 36px; height: 36px; border-radius: 10px; border: none; background: transparent; color: var(--mk-text-dark); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
   .tool-btn:hover { background: var(--mk-hover-light); }
   .tool-btn.color-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--mk-white); box-shadow: 0 0 0 1px rgba(0,0,0,0.1); flex-shrink: 0; }

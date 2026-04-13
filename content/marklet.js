@@ -72,6 +72,7 @@ class Marklet {
     });
     document.addEventListener("mousedown", (e) => {
       if (this.ui && (e.composedPath().includes(this.shadowHost) || this.ui.isPickingCustomColor)) return;
+      if (e.detail > 1) return;
       if (this.ui && (this.ui.palette.classList.contains("visible") || this.ui.selToolbar || this.ui.editToolbar)) {
         this.ui.togglePalette(false); this.ui.hideSelectionToolbar(); this.ui.hideEditToolbar();
       }
@@ -345,10 +346,10 @@ class Marklet {
       const parts = hotkey.toLowerCase().split("+");
       const key = parts.pop();
       const codeMap = { Period: '.', Comma: ',', Slash: '/', Backslash: '\\', BracketLeft: '[', BracketRight: ']', Quote: "'", Semicolon: ';', Minus: '-', Equal: '=', Backquote: '`', Space: 'Space' };
-      let inputKey = e.code.replace(/^Key/, "").replace(/^Digit/, "");
+      let inputKey = (e.code || "").replace(/^Key/, "").replace(/^Digit/, "");
       if (codeMap[inputKey]) inputKey = codeMap[inputKey];
-      if (codeMap[e.code]) inputKey = codeMap[e.code];
-      const isMatch = inputKey.toLowerCase() === key || e.key.toLowerCase() === key;
+      if (e.code && codeMap[e.code]) inputKey = codeMap[e.code];
+      const isMatch = inputKey.toLowerCase() === key || (e.key && e.key.toLowerCase() === key);
       return isMatch &&
         (parts.includes("meta") || parts.includes("cmd") || parts.includes("command")) === e.metaKey &&
         (parts.includes("ctrl") || parts.includes("control")) === e.ctrlKey &&
