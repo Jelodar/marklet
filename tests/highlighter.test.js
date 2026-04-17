@@ -164,3 +164,42 @@ describe('Highlighter.isEditable', () => {
         div.remove();
     });
 });
+
+describe('Highlighter teardown', () => {
+    it('should cancel a pending selection toolbar timer on destroy', async () => {
+        document.body.innerHTML = '<div>Target Text</div>';
+        const textNode = document.body.firstChild.firstChild;
+        const range = document.createRange();
+        range.setStart(textNode, 0);
+        range.setEnd(textNode, textNode.textContent.length);
+
+        const appMock = {
+            shadowHost: document.createElement('div'),
+            pauseObserver: mock.fn(),
+            updateObserverState: mock.fn(),
+            ui: {
+                palette: { classList: { contains: () => false } },
+                isPickingCustomColor: false,
+                hideSelectionToolbar: mock.fn(),
+                showSelectionToolbar: mock.fn()
+            }
+        };
+        const highlighter = new Highlighter(appMock);
+        highlighter.isValidSelection = () => true;
+
+        const originalGetSelection = window.getSelection;
+        window.getSelection = () => ({
+            isCollapsed: false,
+            rangeCount: 1,
+            getRangeAt: () => range,
+            toString: () => 'Target Text'
+        });
+
+        highlighter.handleSelection({ composedPath: () => [] });
+        highlighter.destroy();
+        await new Promise(resolve => setTimeout(resolve, CONSTANTS.SELECTION_DEBOUNCE + 30));
+
+        window.getSelection = originalGetSelection;
+        assert.strictEqual(appMock.ui.showSelectionToolbar.mock.calls.length, 0);
+    });
+});

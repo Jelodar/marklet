@@ -16,9 +16,9 @@ global.chrome = {
         return Promise.resolve(data);
       },
       set: () => Promise.resolve(),
-      remove: () => Promise.resolve(),
-      onChanged: { addListener: () => {} }
-    }
+      remove: () => Promise.resolve()
+    },
+    onChanged: { addListener: () => {} }
   }
 };
 
@@ -41,6 +41,7 @@ global.document = {
     setAttribute: () => {}
   },
   addEventListener: () => {},
+  removeEventListener: () => {},
   readyState: "complete",
   contains: () => true,
   getElementById: () => null
@@ -54,7 +55,21 @@ global.window = {
 global.Node = { ELEMENT_NODE: 1, TEXT_NODE: 3 };
 global.MutationObserver = class { observe() {} disconnect() {} };
 
-global.SharedUtils = { isValidExtension: () => true, normalizeUrl: (u) => u, isSavable: () => true };
+global.SharedUtils = {
+  isValidExtension: () => true,
+  normalizeUrl: (u) => u,
+  setUrlNormalizationSettings: () => ({ defaultHashMode: 'ignore', siteHashModes: {} }),
+  getUrlNormalizationSettings: () => ({ defaultHashMode: 'ignore', siteHashModes: {} }),
+  isSavable: () => true,
+  getDefaultHotkeys: () => ({
+    highlight: 'Alt+H',
+    toggleWhiteboard: 'Alt+Shift+W',
+    toggleDrawings: 'Alt+Shift+D',
+    toggleHighlights: 'Alt+Shift+H',
+    toggleAll: 'Alt+Shift+A'
+  }),
+  normalizePageData: (page, url) => ({ url: url || '', highlights: [], drawings: [], ...(page || {}) })
+};
 global.Whiteboard = class { 
     constructor(app) { 
         this.app = app; 

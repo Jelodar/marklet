@@ -1,6 +1,6 @@
 {
   "name": "marklet",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Highlight and annotate web pages with marker-style overlays and freehand drawings.",
   "main": "background.js",
   "scripts": {
@@ -16,7 +16,7 @@
     "productivity"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "GPL-3.0-only",
   "type": "commonjs",
   "devDependencies": {
     "jsdom": "^24.1.3"

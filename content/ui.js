@@ -37,7 +37,7 @@ class UI {
     });
     this.dock.querySelector("#btn-undo").onclick = () => this.app.whiteboard.undo();
     this.dock.querySelector("#btn-redo").onclick = () => this.app.whiteboard.redo();
-    this.dock.querySelector("#btn-exit-whiteboard").onclick = () => { this.app.whiteboardActive = false; this.toggleWhiteboardMode(false); };
+    this.dock.querySelector("#btn-exit-whiteboard").onclick = () => { this.app.whiteboardActive = false; this.toggleWhiteboardMode(false); this.app.updateObserverState(); };
     this.dock.querySelector("#stroke-thickness").oninput = (e) => this.app.whiteboard.setThickness(parseInt(e.target.value));
 
     const moveBtn = this.dock.querySelector("#btn-move-dock");
@@ -96,6 +96,8 @@ class UI {
     if (this.notificationRemoveTimer) clearTimeout(this.notificationRemoveTimer);
     if (this.longPressTimer) clearTimeout(this.longPressTimer);
     if (this.pickerTimer) clearTimeout(this.pickerTimer);
+    if (this.varietiesPopoverTimer) clearTimeout(this.varietiesPopoverTimer);
+    this.clearVarietiesPopover();
     this.container.remove();
     this.absoluteContainer.remove();
   }
@@ -244,8 +246,22 @@ class UI {
       this.updatePaletteDOM();
     };
   }
+  clearVarietiesPopover() {
+    if (this.varietiesPopoverTimer) {
+      clearTimeout(this.varietiesPopoverTimer);
+      this.varietiesPopoverTimer = null;
+    }
+    if (this.varietiesOutsideClickListener) {
+      document.removeEventListener("mousedown", this.varietiesOutsideClickListener);
+      this.varietiesOutsideClickListener = null;
+    }
+    if (this.varietiesPopover) {
+      this.varietiesPopover.remove();
+      this.varietiesPopover = null;
+    }
+  }
   showVarieties(color, target, index) {
-    if (this.varietiesPopover) this.varietiesPopover.remove();
+    this.clearVarietiesPopover();
     const origin = (index !== undefined) ? this.originColors[index] : color;
     this.varietiesPopover = Object.assign(document.createElement("div"), { className: "varieties-popover", innerHTML: this.getColorVarieties(origin).map(v => `<div class="variety-swatch" style="background:${v}" data-color="${v}"></div>`).join("") });
     const rect = target.getBoundingClientRect(), popWidth = 178;
@@ -272,12 +288,17 @@ class UI {
           if (picker) picker.value = this.rgbToHex(newColor);
           if (customLabel) customLabel.style.color = "#007bff";
         }
-        this.varietiesPopover.remove(); this.varietiesPopover = null;
+        this.clearVarietiesPopover();
       }
     };
     this.container.appendChild(this.varietiesPopover);
-    const close = (e) => { if (this.varietiesPopover && !e.composedPath().includes(this.varietiesPopover)) { this.varietiesPopover.remove(); this.varietiesPopover = null; document.removeEventListener("mousedown", close); } };
-    setTimeout(() => document.addEventListener("mousedown", close), 10);
+    this.varietiesOutsideClickListener = (e) => {
+      if (this.varietiesPopover && !e.composedPath().includes(this.varietiesPopover)) this.clearVarietiesPopover();
+    };
+    this.varietiesPopoverTimer = setTimeout(() => {
+      document.addEventListener("mousedown", this.varietiesOutsideClickListener);
+      this.varietiesPopoverTimer = null;
+    }, 10);
   }
   applyColor(c) {
     if (!SharedUtils.isValidExtension()) return;
@@ -332,7 +353,7 @@ class UI {
       this.app.toggleDrawingsVisibility(true);
       this.setTool("draw"); this.updateDockColorPrev();
       if (!this.app.isSavable) {
-        setTimeout(() => this.showNotification("⚠️ This page type (blob/data/etc) doesn't support saving. Your annotations will be lost on reload."), 1000);
+        setTimeout(() => this.showNotification("This page type does not support saving. Annotations on it will be lost after reload."), 1000);
       }
     }
   }

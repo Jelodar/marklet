@@ -1,6 +1,14 @@
-importScripts('utils/tiny-idb.js', 'utils/consts.js');
+importScripts('utils/tiny-idb.js', 'utils/page-storage.js', 'utils/consts.js');
 
 const db = tinyIDB.raw;
+const sendDbResponse = (promise, sendResponse, onSuccess) => {
+  promise.then((value) => {
+    if (onSuccess) onSuccess(value);
+    sendResponse({ ok: true, value });
+  }).catch((error) => {
+    sendResponse({ ok: false, error: error?.message || String(error) });
+  });
+};
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -18,48 +26,45 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onMessage.addListener((m, sender, sendResponse) => {
   if (m.type === 'DB_GET') {
-    db.get(m.key).then(sendResponse);
+    sendDbResponse(db.get(m.key), sendResponse);
     return true;
   }
   if (m.type === 'DB_GET_BATCH') {
-    db.getBatch(m.keys).then(sendResponse);
+    sendDbResponse(db.getBatch(m.keys), sendResponse);
     return true;
   }
   if (m.type === 'DB_KEYS') {
-    db.keys().then(sendResponse);
+    sendDbResponse(tinyIDB.keys(), sendResponse);
     return true;
   }
   if (m.type === 'DB_SET') {
-    db.set(m.key, m.value).then(() => {
-        sendResponse();
-        notifyPageUpdated(m.key, sender.tab?.id);
+    sendDbResponse(db.set(m.key, m.value), sendResponse, () => {
+      notifyPageUpdated(m.key, sender.tab?.id);
     });
     return true;
   }
   if (m.type === 'DB_REMOVE') {
-    db.remove(m.key).then(() => {
-        sendResponse();
-        notifyPageUpdated(m.key, sender.tab?.id);
+    sendDbResponse(db.remove(m.key), sendResponse, () => {
+      notifyPageUpdated(m.key, sender.tab?.id);
     });
     return true;
   }
   if (m.type === 'DB_UPDATE') {
-    db.update(m.key, (old) => {
+    sendDbResponse(db.update(m.key, (old) => {
         if (m.cmd === 'clear_highlights') { if (old) old.highlights = []; return old; }
         if (m.cmd === 'replace_drawings') { const p = old || { url: m.key.replace(/^page:/, ''), highlights: [], drawings: [] }; p.drawings = m.value; return p; }
         return m.value;
-    }).then((newVal) => {
-        notifyPageUpdated(m.key, sender.tab?.id);
-        sendResponse(newVal);
+    }), sendResponse, () => {
+      notifyPageUpdated(m.key, sender.tab?.id);
     });
     return true;
   }
   if (m.type === 'DB_ENTRIES') {
-    db.entries().then(sendResponse);
+    sendDbResponse(tinyIDB.entries(), sendResponse);
     return true;
   }
   if (m.type === 'DB_CLEAR') {
-    db.clear().then(sendResponse);
+    sendDbResponse(db.clear(), sendResponse);
     return true;
   }
   if (m.type === 'INJECT_GLOBAL_STYLES' && sender.tab) {

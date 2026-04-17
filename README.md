@@ -88,4 +88,4 @@ npm test
 
 ## License
 
-Distributed under the GNU GPL 3 License.
+Distributed under the GNU GPL v3 license.

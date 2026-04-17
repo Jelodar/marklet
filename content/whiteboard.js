@@ -1,6 +1,7 @@
 class Whiteboard {
   constructor(app) {
-    this.app = app; this.active = false; this.canvas = null; this.svg = null; this.strokes = []; this.history = []; this.color = "#FF0000"; this.lineWidth = 5; this.mode = "draw"; this.blendMode = "normal"; this.opacity = 75; this.localPage = { drawings: [] }; this.init();
+    const drawingDefaults = SharedUtils.getDefaultDrawingSettings();
+    this.app = app; this.active = false; this.canvas = null; this.svg = null; this.strokes = []; this.history = []; this.color = "#FF0000"; this.lineWidth = 5; this.mode = "draw"; this.blendMode = drawingDefaults.blendMode; this.opacity = drawingDefaults.opacity; this.localPage = SharedUtils.normalizePageData({ drawings: [] }, SharedUtils.normalizeUrl(window.location.href)); this.init();
   }
   init() {
     this.loadStrokes(); this.resizeListener = () => this.handleResize(); this.scrollListener = () => { if (this.active) this.redraw(); };
@@ -330,14 +331,14 @@ class Whiteboard {
     const url = SharedUtils.normalizeUrl(window.location.href);
     if (this.app.isSavable) {
       if (this.strokes.length === 0) {
-        const page = await tinyIDB.get(url);
+        const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
         if (page) {
           page.drawings = [];
           if (!page.highlights || !page.highlights.length) await tinyIDB.remove(url);
           else { page.lastUpdated = Date.now(); await tinyIDB.set(url, page); }
         }
       } else {
-        const page = await tinyIDB.get(url) || { url, highlights: [], drawings: [] };
+        const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
         page.drawings = this.strokes;
         page.lastUpdated = Date.now();
         await tinyIDB.set(url, page);
@@ -347,8 +348,9 @@ class Whiteboard {
   async loadStrokes() {
     if (!SharedUtils.isValidExtension()) return;
     if (this.app.isSavable) {
-      const page = await tinyIDB.get(SharedUtils.normalizeUrl(window.location.href));
-      this.strokes = page?.drawings || [];
+      const url = SharedUtils.normalizeUrl(window.location.href);
+      const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
+      this.strokes = page.drawings;
     } else this.strokes = this.localPage.drawings || [];
     if (this.strokes.length > 0) { if (this.active) { this.setupCanvas(); this.redraw(); } else this.renderSVG(); }
     else { if (this.canvas) { this.canvas.remove(); this.canvas = null; this.ctx = null; } if (this.svg) { this.svg.remove(); this.svg = null; } }

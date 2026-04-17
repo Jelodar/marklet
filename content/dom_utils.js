@@ -1,65 +1,82 @@
 class DOMUtils {
-  static getGlobalOffsets(range) {
-    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let offset = 0, start = -1, end = -1, node;
-    const sc = range.startContainer, ec = range.endContainer;
-    const so = range.startOffset, eo = range.endOffset;
-
-    const getFirstTextNode = (root) => {
-        if (root.nodeType === 3) return root;
-        const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-        return tw.nextNode();
-    };
-
-    const scText = sc.nodeType === 3 ? sc : getFirstTextNode(sc.childNodes[so] || sc);
-    const ecText = ec.nodeType === 3 ? ec : getFirstTextNode(ec.childNodes[eo - 1] || ec);
-
-    while ((node = w.nextNode())) {
-      if (node === scText) start = offset + (sc.nodeType === 3 ? so : 0);
-      if (node === ecText) end = offset + (ec.nodeType === 3 ? eo : node.textContent.length);
-      offset += node.textContent.length;
+  static createTextSnapshot() {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    const starts = [];
+    const lengths = [];
+    const nodeOffsets = new Map();
+    let text = "", node;
+    while ((node = walker.nextNode())) {
+      const start = text.length;
+      nodes.push(node);
+      starts.push(start);
+      lengths.push(node.textContent.length);
+      nodeOffsets.set(node, start);
+      text += node.textContent;
     }
-    return (start === -1 || end === -1) ? null : { start, end };
+    return { nodes, starts, lengths, nodeOffsets, text };
   }
-  static getBatchGlobalOffsets(ranges) {
-    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let offset = 0, node;
-    const resultMap = new Map(), nodeMap = new Map();
+  static getFirstTextNode(root) {
+    if (!root) return null;
+    if (root.nodeType === Node.TEXT_NODE) return root;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    return walker.nextNode();
+  }
+  static resolveBoundary(container, offset, isEnd) {
+    if (container.nodeType === Node.TEXT_NODE) {
+      return { node: container, offset };
+    }
+    const target = container.childNodes[isEnd ? offset - 1 : offset] || container;
+    const node = DOMUtils.getFirstTextNode(target);
+    if (!node) return null;
+    return { node, offset: isEnd ? node.textContent.length : 0 };
+  }
+  static getGlobalOffsets(range, snapshot = DOMUtils.createTextSnapshot()) {
+    const startBoundary = DOMUtils.resolveBoundary(range.startContainer, range.startOffset, false);
+    const endBoundary = DOMUtils.resolveBoundary(range.endContainer, range.endOffset, true);
+    if (!startBoundary || !endBoundary) return null;
+    const startBase = snapshot.nodeOffsets.get(startBoundary.node);
+    const endBase = snapshot.nodeOffsets.get(endBoundary.node);
+    if (startBase === undefined || endBase === undefined) return null;
+    return { start: startBase + startBoundary.offset, end: endBase + endBoundary.offset };
+  }
+  static getBatchGlobalOffsets(ranges, snapshot = DOMUtils.createTextSnapshot()) {
+    const resultMap = new Map();
     ranges.forEach(({ id, range }) => {
       if (!range) return;
-      const { startContainer: sc, endContainer: ec } = range;
-      if (!nodeMap.has(sc)) nodeMap.set(sc, []);
-      nodeMap.get(sc).push({ id, type: "start", localOffset: range.startOffset });
-      if (!nodeMap.has(ec)) nodeMap.set(ec, []);
-      nodeMap.get(ec).push({ id, type: "end", localOffset: range.endOffset });
+      const offsets = DOMUtils.getGlobalOffsets(range, snapshot);
+      if (offsets) resultMap.set(id, offsets);
     });
-    while ((node = w.nextNode())) {
-      if (nodeMap.has(node)) {
-        nodeMap.get(node).forEach(({ id, type, localOffset }) => {
-          if (!resultMap.has(id)) resultMap.set(id, {});
-          resultMap.get(id)[type] = offset + localOffset;
-        });
-      }
-      offset += node.textContent.length;
-    }
-    for (const [id, res] of resultMap) {
-      if (res.start === undefined || res.end === undefined) resultMap.delete(id);
-    }
     return resultMap;
   }
-  static getRangeFromOffsets(start, end) {
-    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let offset = 0, node, rsNode, rsOffset, reNode, reOffset;
-    while ((node = w.nextNode())) {
-      const len = node.textContent.length;
-      if (rsNode === undefined && start >= offset && start < offset + len) {
-        rsNode = node; rsOffset = start - offset;
+  static findTextNodeIndex(snapshot, offset, isEnd = false) {
+    if (!snapshot.nodes.length) return -1;
+    const probe = isEnd ? offset - 1 : offset;
+    if (probe < 0) return -1;
+    let low = 0, high = snapshot.starts.length - 1, result = -1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (snapshot.starts[mid] <= probe) {
+        result = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
       }
-      if (end > offset && end <= offset + len) {
-        reNode = node; reOffset = end - offset; break;
-      }
-      offset += len;
     }
+    if (result === -1) return -1;
+    const nodeStart = snapshot.starts[result];
+    const nodeEnd = nodeStart + snapshot.lengths[result];
+    if (isEnd ? offset > nodeStart && offset <= nodeEnd : offset >= nodeStart && offset < nodeEnd) return result;
+    return -1;
+  }
+  static getRangeFromOffsets(start, end, snapshot = DOMUtils.createTextSnapshot()) {
+    const startIndex = DOMUtils.findTextNodeIndex(snapshot, start, false);
+    const endIndex = DOMUtils.findTextNodeIndex(snapshot, end, true);
+    if (startIndex === -1 || endIndex === -1) return null;
+    const rsNode = snapshot.nodes[startIndex];
+    const reNode = snapshot.nodes[endIndex];
+    const rsOffset = start - snapshot.starts[startIndex];
+    const reOffset = end - snapshot.starts[endIndex];
     if (rsNode && reNode) {
       const r = document.createRange();
       try { r.setStart(rsNode, rsOffset); r.setEnd(reNode, reOffset); return r; } catch (e) { return null; }
@@ -106,34 +123,24 @@ class DOMUtils {
     }
     return null;
   }
-  static getDocumentText() {
-    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let text = "", node;
-    while ((node = w.nextNode())) text += node.textContent;
-    return text;
+  static getDocumentText(snapshot = DOMUtils.createTextSnapshot()) {
+    return snapshot.text;
   }
-  static findFallbackRange(targetText, fullDOMText, expectedStart, expectedDocLength, expectedNodeOffset) {
-    if (!targetText || !fullDOMText) return null;
+  static findFallbackRange(targetText, fullDOMText, expectedStart, expectedDocLength, expectedNodeOffset, snapshot = DOMUtils.createTextSnapshot()) {
+    const text = fullDOMText || snapshot.text;
+    if (!targetText || !text) return null;
     const indices = [];
-    let idx = fullDOMText.indexOf(targetText);
-    while (idx !== -1) { indices.push(idx); idx = fullDOMText.indexOf(targetText, idx + 1); }
+    let idx = text.indexOf(targetText);
+    while (idx !== -1) { indices.push(idx); idx = text.indexOf(targetText, idx + 1); }
     if (indices.length === 0) return null;
-    if (indices.length === 1) return DOMUtils.getRangeFromOffsets(indices[0], indices[0] + targetText.length);
+    if (indices.length === 1) return DOMUtils.getRangeFromOffsets(indices[0], indices[0] + targetText.length, snapshot);
     const candidates = [];
-    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    let offset = 0, node, ptr = 0;
-    while ((node = w.nextNode())) {
-      const len = node.textContent.length, nodeEnd = offset + len;
-      while (ptr < indices.length) {
-        const startGlobal = indices[ptr];
-        if (startGlobal >= nodeEnd) break;
-        candidates.push({ index: startGlobal, nodeOffset: startGlobal - offset });
-        ptr++;
-      }
-      offset += len;
-      if (ptr >= indices.length) break;
-    }
-    const currentDocLength = fullDOMText.length;
+    indices.forEach((startGlobal) => {
+      const nodeIndex = DOMUtils.findTextNodeIndex(snapshot, startGlobal, false);
+      if (nodeIndex === -1) return;
+      candidates.push({ index: startGlobal, nodeOffset: startGlobal - snapshot.starts[nodeIndex] });
+    });
+    const currentDocLength = text.length;
     let projectedStart = -1;
     if (expectedStart !== undefined && expectedDocLength) projectedStart = (expectedStart / expectedDocLength) * currentDocLength;
     candidates.forEach((c) => {
@@ -143,7 +150,7 @@ class DOMUtils {
     candidates.sort((a, b) => (a.score !== b.score ? b.score - a.score : a.drift - b.drift));
     const best = candidates[0];
     if (best.score < 1000 && projectedStart !== -1 && best.drift > currentDocLength * 0.2) return null;
-    return DOMUtils.getRangeFromOffsets(best.index, best.index + targetText.length);
+    return DOMUtils.getRangeFromOffsets(best.index, best.index + targetText.length, snapshot);
   }
   static stripHighlights() {
       document.querySelectorAll(".marklet-highlight, .marklet-flex-wrapper").forEach((el) => {

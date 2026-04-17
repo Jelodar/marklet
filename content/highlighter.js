@@ -5,7 +5,7 @@ class Highlighter {
     this.selectionToolbarEnabled = true;
     this.allowReadonly = true;
     this.isProcessing = false;
-    this.localPage = { highlights: [] };
+    this.localPage = SharedUtils.normalizePageData({ highlights: [] }, SharedUtils.normalizeUrl(window.location.href));
     this.init();
   }
   init() {
@@ -27,6 +27,7 @@ class Highlighter {
     this.loadDefaultColor();
   }
   destroy() {
+    if (this.selectionTimer) clearTimeout(this.selectionTimer);
     document.removeEventListener("mouseup", this.mouseUpListener);
     document.removeEventListener("selectionchange", this.selectionChangeListener);
     document.removeEventListener("click", this.clickListener);
@@ -76,7 +77,7 @@ class Highlighter {
     }
     return false;
   }
-  resolveStoredHighlights(highlights) {
+  resolveStoredHighlights(highlights, snapshot = DOMUtils.createTextSnapshot()) {
     let fullDOMText = null;
     const resolved = [], unresolved = [];
     highlights.forEach(h => {
@@ -84,8 +85,8 @@ class Highlighter {
       const normalize = (s) => (s || "").replace(/\s+/g, " ").trim();
       const stored = normalize(h.text);
       if (stored && (!r || normalize(r.toString()) !== stored)) {
-        if (fullDOMText === null) fullDOMText = DOMUtils.getDocumentText();
-        const fr = DOMUtils.findFallbackRange(h.text, fullDOMText, h.start, h.docLength, h.anchor?.startOffset);
+        if (fullDOMText === null) fullDOMText = DOMUtils.getDocumentText(snapshot);
+        const fr = DOMUtils.findFallbackRange(h.text, fullDOMText, h.start, h.docLength, h.anchor?.startOffset, snapshot);
         if (fr) r = fr;
       }
       if (r && stored && normalize(r.toString()) !== stored) r = null;
@@ -93,6 +94,13 @@ class Highlighter {
       else unresolved.push(h);
     });
     return { resolved, unresolved };
+  }
+  renderIntervals(intervals) {
+    const displayCache = new WeakMap();
+    intervals.forEach(item => {
+      const range = DOMUtils.getRangeFromOffsets(item.start, item.end);
+      if (range) this.renderHighlight(range, item.color, item.id, displayCache);
+    });
   }
   async applyHighlight(r, c, isHotkey = false) {
     if (!SharedUtils.isValidExtension() || this.isProcessing) return;
@@ -105,13 +113,14 @@ class Highlighter {
     this.app.pauseObserver();
     try {
       const url = SharedUtils.normalizeUrl(window.location.href);
-      const page = await tinyIDB.get(url) || { url, highlights: [], drawings: [] };
+      const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
       const newOffsets = DOMUtils.getGlobalOffsets(r);
       const text = r.toString();
       if (!newOffsets) throw new Error("Unable to calculate offsets");
       DOMUtils.stripHighlights();
-      const { resolved: rangeRequests, unresolved: initiallyUnresolved } = this.resolveStoredHighlights(page.highlights);
-      const offsetMap = DOMUtils.getBatchGlobalOffsets(rangeRequests);
+      const snapshot = DOMUtils.createTextSnapshot();
+      const { resolved: rangeRequests, unresolved: initiallyUnresolved } = this.resolveStoredHighlights(page.highlights, snapshot);
+      const offsetMap = DOMUtils.getBatchGlobalOffsets(rangeRequests, snapshot);
       const resolvedHighlights = [];
       const unresolved = [...initiallyUnresolved];
       rangeRequests.forEach(req => {
@@ -120,7 +129,7 @@ class Highlighter {
         else unresolved.push(req.highlight);
       });
       const merged = this.flattenIntervals(resolvedHighlights, { start: newOffsets.start, end: newOffsets.end, color: c, text });
-      await this.renderAndSave(merged, page, url, unresolved);
+      await this.renderAndSave(merged, page, url, unresolved, snapshot);
       this.app.ui.trackRecentColor(c);
       window.getSelection().removeAllRanges();
       const newHighlight = merged.find(m => m.start <= newOffsets.start && m.end >= newOffsets.end);
@@ -166,22 +175,15 @@ class Highlighter {
     }
     return m;
   }
-  renderIntervals(intervals) {
-    const displayCache = new WeakMap();
-    intervals.forEach(item => {
-      const r = DOMUtils.getRangeFromOffsets(item.start, item.end);
-      if (r) this.renderHighlight(r, item.color, item.id, displayCache);
-    });
-  }
-  async renderAndSave(intervals, page, url, unresolved = []) {
+  async renderAndSave(intervals, page, url, unresolved = [], snapshot = DOMUtils.createTextSnapshot()) {
     DOMUtils.stripHighlights();
-    const docLength = DOMUtils.getDocumentText().length;
-    const highlights = intervals.map(m => {
-      const range = DOMUtils.getRangeFromOffsets(m.start, m.end);
+    const docLength = DOMUtils.getDocumentText(snapshot).length;
+    const highlights = intervals.map(item => {
+      const range = DOMUtils.getRangeFromOffsets(item.start, item.end);
       if (!range) return null;
-      const id = m.id || crypto.randomUUID();
-      m.id = id;
-      return { id, url, color: m.color, text: m.text || range.toString(), anchor: DOMUtils.serializeRange(range), start: m.start, docLength, timestamp: Date.now() };
+      const id = item.id || crypto.randomUUID();
+      item.id = id;
+      return { id, url, color: item.color, text: item.text || range.toString(), anchor: DOMUtils.serializeRange(range), start: item.start, docLength, timestamp: Date.now() };
     }).filter(Boolean);
     if (this.app.isSavable) {
       page.highlights = [...highlights, ...unresolved];
@@ -201,17 +203,19 @@ class Highlighter {
       const url = SharedUtils.normalizeUrl(window.location.href);
       let pageHighlights = [];
       if (this.app.isSavable) {
-        const page = await tinyIDB.get(url);
-        pageHighlights = page?.highlights || [];
+        const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
+        pageHighlights = page.highlights;
       } else {
         pageHighlights = this.localPage.highlights || [];
       }
       DOMUtils.stripHighlights();
+      const snapshot = DOMUtils.createTextSnapshot();
       this.app.hasHighlights = pageHighlights.length > 0;
       if (!this.app.hasHighlights) return;
-      const { resolved: rangeRequests } = this.resolveStoredHighlights(pageHighlights);
-      const offsetMap = DOMUtils.getBatchGlobalOffsets(rangeRequests);
-      this.renderIntervals(rangeRequests.map(req => offsetMap.get(req.id) ? { start: offsetMap.get(req.id).start, end: offsetMap.get(req.id).end, color: req.highlight.color, id: req.id } : null).filter(Boolean));
+      const { resolved: rangeRequests } = this.resolveStoredHighlights(pageHighlights, snapshot);
+      const offsetMap = DOMUtils.getBatchGlobalOffsets(rangeRequests, snapshot);
+      const intervals = rangeRequests.map(req => offsetMap.get(req.id) ? { start: offsetMap.get(req.id).start, end: offsetMap.get(req.id).end, color: req.highlight.color, id: req.id } : null).filter(Boolean);
+      this.renderIntervals(intervals);
     } catch (e) {
       console.error("Marklet:", e);
     } finally {
@@ -285,7 +289,7 @@ class Highlighter {
     this.app.pauseObserver();
     try {
       const url = SharedUtils.normalizeUrl(window.location.href);
-      const page = await tinyIDB.get(url);
+      const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
       if (page) {
         page.highlights = page.highlights.filter(h => h.id !== id);
         if (page.highlights.length === 0 && (!page.drawings || page.drawings.length === 0)) await tinyIDB.remove(url);
@@ -315,8 +319,8 @@ class Highlighter {
     this.app.pauseObserver();
     try {
       const url = SharedUtils.normalizeUrl(window.location.href);
-      const page = await tinyIDB.get(url);
-      const h = page?.highlights?.find(x => x.id === id);
+      const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
+      const h = page.highlights.find(x => x.id === id);
       if (h) {
         h.color = c;
         await tinyIDB.set(url, page);

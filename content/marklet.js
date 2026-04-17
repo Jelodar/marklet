@@ -50,12 +50,17 @@ class Marklet {
     this.hasHighlights = false;
     this.lastUrl = SharedUtils.normalizeUrl(window.location.href);
     this.observerPaused = true;
+    this.hotkeys = SharedUtils.getDefaultHotkeys();
     this.bindMessageListener();
+    this.bindStorageListener();
+    this.loadHotkeys();
     this.destroyed = false;
     this.isSavable = SharedUtils.isSavable(window.location.href);
-    chrome.storage.local.get(["extensionEnabled", "enableByDefault", "disabledSites", "enabledSites"], (res) => {
+    chrome.storage.local.get(["extensionEnabled", "enableByDefault", "disabledSites", "enabledSites", "urlHashMode", "urlHashSiteModes"], (res) => {
       if (this.destroyed) return;
       if (!SharedUtils.isValidExtension()) return;
+      SharedUtils.setUrlNormalizationSettings(res);
+      this.lastUrl = SharedUtils.normalizeUrl(window.location.href);
       const isGloballyEnabled = res.extensionEnabled !== false;
       if (!isGloballyEnabled) return;
       const hostname = window.location.hostname;
@@ -70,37 +75,81 @@ class Marklet {
       }
       if (shouldInit) this.initAll();
     });
-    document.addEventListener("mousedown", (e) => {
+  }
+  bindStorageListener() {
+    this.storageChangeListener = (changes) => {
+      if (changes.hotkeys) {
+        this.hotkeys = { ...SharedUtils.getDefaultHotkeys(), ...(changes.hotkeys.newValue || {}) };
+      }
+      if (changes.urlHashMode || changes.urlHashSiteModes) {
+        SharedUtils.setUrlNormalizationSettings({
+          urlHashMode: changes.urlHashMode ? changes.urlHashMode.newValue : SharedUtils.getUrlNormalizationSettings().defaultHashMode,
+          urlHashSiteModes: changes.urlHashSiteModes ? changes.urlHashSiteModes.newValue : SharedUtils.getUrlNormalizationSettings().siteHashModes
+        });
+        this.lastUrl = SharedUtils.normalizeUrl(window.location.href);
+      }
+    };
+    chrome.storage.onChanged.addListener(this.storageChangeListener);
+  }
+  async loadHotkeys() {
+    if (!SharedUtils.isValidExtension()) return;
+    const data = await chrome.storage.local.get(["hotkeys"]);
+    this.hotkeys = { ...SharedUtils.getDefaultHotkeys(), ...(data.hotkeys || {}) };
+  }
+  bindDocumentMouseDown() {
+    if (this.documentMouseDownListener) return;
+    this.documentMouseDownListener = (e) => {
       if (this.ui && (e.composedPath().includes(this.shadowHost) || this.ui.isPickingCustomColor)) return;
       if (e.detail > 1) return;
       if (this.ui && (this.ui.palette.classList.contains("visible") || this.ui.selToolbar || this.ui.editToolbar)) {
         this.ui.togglePalette(false); this.ui.hideSelectionToolbar(); this.ui.hideEditToolbar();
       }
-    });
+    };
+    document.addEventListener("mousedown", this.documentMouseDownListener);
+  }
+  unbindDocumentMouseDown() {
+    if (!this.documentMouseDownListener) return;
+    document.removeEventListener("mousedown", this.documentMouseDownListener);
+    this.documentMouseDownListener = null;
   }
   initAll() {
     this.destroyed = false;
+    if (!this.storageChangeListener) this.bindStorageListener();
     this.migrateData().then(() => {
       if (this.destroyed) return;
       if (this.highlighter) return;
       this.whiteboard = new Whiteboard(this);
       this.highlighter = new Highlighter(this);
       this.ui = new UI(this.shadow, this);
+      this.bindDocumentMouseDown();
       this.bindKeyboardEvents();
       this.restoreState();
       this.initObserver();
-      this.listenForUrlChanges();
+      this.lastUrl = SharedUtils.normalizeUrl(window.location.href);
       const load = () => {
         this.highlighter.loadHighlights(true).then(() => {
           this.updateObserverState();
         });
       };
-      (document.readyState === "complete") ? load() : window.addEventListener("load", load);
+      if (document.readyState === "complete") {
+        load();
+      } else {
+        this.pendingLoadListener = () => {
+          window.removeEventListener("load", this.pendingLoadListener);
+          this.pendingLoadListener = null;
+          load();
+        };
+        window.addEventListener("load", this.pendingLoadListener);
+      }
     });
   }
   destroyAll() {
     this.destroyed = true;
-    if (this.urlCheckInterval) { clearInterval(this.urlCheckInterval); this.urlCheckInterval = null; }
+    if (this.pendingLoadListener) {
+      window.removeEventListener("load", this.pendingLoadListener);
+      this.pendingLoadListener = null;
+    }
+    this.unbindDocumentMouseDown();
     this.pauseObserver();
     if (this.ui) { this.ui.destroy(); this.ui.container.remove(); this.ui.absoluteContainer.remove(); this.ui = null; }
     if (this.whiteboard) { this.whiteboard.destroy(); this.whiteboard.canvas?.remove(); this.whiteboard = null; }
@@ -131,14 +180,17 @@ class Marklet {
       window.removeEventListener("keypress", this.keyListener, true);
       this.keyListener = null;
     }
+    if (this.storageChangeListener && chrome.storage.onChanged.removeListener) {
+      chrome.storage.onChanged.removeListener(this.storageChangeListener);
+      this.storageChangeListener = null;
+    }
   }
-  listenForUrlChanges() {
-    const check = () => {
-      const currentNormalized = SharedUtils.normalizeUrl(window.location.href);
-      if (currentNormalized !== this.lastUrl) { this.lastUrl = currentNormalized; this.handleUrlChange(); }
-    };
-    window.addEventListener("popstate", check);
-    this.urlCheckInterval = setInterval(check, CONSTANTS.URL_CHECK_INTERVAL);
+  handleObservedUrlChange(nextUrl = window.location.href) {
+    const currentNormalized = SharedUtils.normalizeUrl(nextUrl);
+    if (currentNormalized === this.lastUrl) return false;
+    this.lastUrl = currentNormalized;
+    this.handleUrlChange();
+    return true;
   }
   handleUrlChange() {
     if (this.highlighter) this.highlighter.loadHighlights(true).then(() => this.updateObserverState());
@@ -160,7 +212,7 @@ class Marklet {
     }
 
     for (const [url, data] of Object.entries(pages)) {
-      await tinyIDB.set(url, data);
+      await tinyIDB.set(url, SharedUtils.normalizePageData(data, url));
     }
     await chrome.storage.local.remove("pages");
   }
@@ -221,7 +273,7 @@ class Marklet {
       if (m.type === "GET_HIGHLIGHTS") {
         const url = SharedUtils.normalizeUrl(window.location.href);
         tinyIDB.get(url).then(page => {
-          sendResponse({ highlights: page?.highlights || [] });
+          sendResponse({ highlights: SharedUtils.normalizePageData(page, url).highlights });
         });
         return true;
       }
@@ -246,7 +298,7 @@ class Marklet {
         if (m.type === "GET_STATE") sendResponse({ whiteboardActive: false, selectionOverrideActive: this.selectionOverrideActive });
         return;
       }
-      if (m.type === "URL_CHANGED") this.handleUrlChange();
+      if (m.type === "URL_CHANGED") this.handleObservedUrlChange(m.url || window.location.href);
       if (m.type === "TOGGLE_HIGHLIGHTS_VISIBILITY") this.toggleHighlightsVisibility(m.active);
       if (m.type === "TOGGLE_DRAWINGS_VISIBILITY") this.toggleDrawingsVisibility(m.active);
       if (m.type === "TOGGLE_WHITEBOARD") {
@@ -331,16 +383,8 @@ class Marklet {
       this.checkHotkeys(e);
     }
   }
-  async checkHotkeys(e) {
-    const d = await chrome.storage.local.get(["hotkeys"]);
-    const defaults = {
-      highlight: "Alt+H",
-      toggleWhiteboard: "Alt+Shift+W",
-      toggleDrawings: "Alt+Shift+D",
-      toggleHighlights: "Alt+Shift+H",
-      toggleAll: "Alt+Shift+A"
-    };
-    const hotkeys = d.hotkeys || defaults;
+  checkHotkeys(e) {
+    const hotkeys = this.hotkeys || SharedUtils.getDefaultHotkeys();
     const checkKey = (hotkey) => {
       if (!hotkey) return false;
       const parts = hotkey.toLowerCase().split("+");

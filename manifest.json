@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Marklet",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Highlight and annotate web pages with marker-style overlays and freehand drawings.",
   "permissions": [
     "storage",
@@ -35,6 +35,7 @@
       "match_origin_as_fallback": true,
       "js": [
         "utils/tiny-idb.js",
+        "utils/page-storage.js",
         "utils/shared.js",
         "utils/consts.js",
         "content/assets.js",

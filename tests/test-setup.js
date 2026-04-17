@@ -188,6 +188,21 @@ global.tinyIDB = {
     for (const key of mockStorage.keys()) if (key.startsWith('idb_')) mockStorage.delete(key);
   })
 };
+global.tinyIDB.raw = {
+  get: mock.fn(async (key) => mockStorage.get(`idb_${key}`)),
+  getBatch: mock.fn(async (keys) => keys.map(k => mockStorage.get(`idb_${k}`))),
+  set: mock.fn(async (key, val) => { mockStorage.set(`idb_${key}`, val); }),
+  remove: mock.fn(async (key) => { mockStorage.delete(`idb_${key}`); }),
+  update: mock.fn(async (key, fn) => {
+    const current = mockStorage.get(`idb_${key}`);
+    const next = await fn(current);
+    mockStorage.set(`idb_${key}`, next);
+    return next;
+  }),
+  clear: mock.fn(async () => {
+    for (const key of mockStorage.keys()) if (key.startsWith('idb_')) mockStorage.delete(key);
+  })
+};
 
 global.SharedUtils = require('../utils/shared.js');
 global.CONSTANTS = require('../utils/consts.js').CONSTANTS;

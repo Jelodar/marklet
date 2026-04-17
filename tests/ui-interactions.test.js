@@ -147,4 +147,22 @@ describe('UI Interactions', () => {
         assert.strictEqual(popoverSwatches[4].dataset.color.toLowerCase(), originalOrigin.toLowerCase());
         popover.remove();
     });
+
+    it('should remove varieties outside-click listener on destroy', async () => {
+        ui.togglePalette(true);
+        const addSpy = mock.method(document, 'addEventListener');
+        const removeSpy = mock.method(document, 'removeEventListener');
+        const swatch = ui.palette.querySelector('.color-swatch');
+
+        swatch.dispatchEvent(new MouseEvent('contextmenu'));
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        const addCall = addSpy.mock.calls.find(call => call.arguments[0] === 'mousedown');
+        assert.ok(addCall, 'Varieties outside-click listener should be added');
+
+        ui.destroy();
+
+        const removeCall = removeSpy.mock.calls.find(call => call.arguments[0] === 'mousedown' && call.arguments[1] === addCall.arguments[1]);
+        assert.ok(removeCall, 'Varieties outside-click listener should be removed on destroy');
+    });
 });

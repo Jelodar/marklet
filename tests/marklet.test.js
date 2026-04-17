@@ -164,4 +164,83 @@ describe('Marklet', () => {
         
         global.MutationObserver = OriginalObserver;
     });
+
+    it('should only reload when the normalized url identity changes', async () => {
+        chrome.storage.local.get = mock.fn((keys, callback) => {
+            const res = { extensionEnabled: true, enableByDefault: true };
+            if (callback) callback(res);
+            return Promise.resolve(res);
+        });
+
+        marklet = new Marklet();
+        await new Promise(resolve => setImmediate(resolve));
+
+        const handleUrlChange = mock.method(marklet, 'handleUrlChange', () => {});
+
+        marklet.lastUrl = 'http://localhost';
+        marklet.handleObservedUrlChange('http://localhost#section');
+        assert.strictEqual(handleUrlChange.mock.calls.length, 0);
+
+        marklet.handleObservedUrlChange('http://localhost/first');
+        assert.strictEqual(handleUrlChange.mock.calls.length, 1);
+
+        await marklet.toggleExtension(false);
+        await marklet.toggleExtension(true);
+        await new Promise(resolve => setImmediate(resolve));
+
+        marklet.handleObservedUrlChange('http://localhost/second');
+        assert.strictEqual(handleUrlChange.mock.calls.length, 2);
+    });
+
+    it('should pause MutationObserver when whiteboard exits from the dock', async () => {
+        let observeCalled = 0;
+        let disconnectCalled = 0;
+        const OriginalObserver = global.MutationObserver;
+        global.MutationObserver = class MutationObserver {
+            constructor(cb) {}
+            observe() { observeCalled++; }
+            disconnect() { disconnectCalled++; }
+        };
+
+        chrome.storage.local.get = mock.fn((keys, callback) => {
+            const res = { extensionEnabled: true, enableByDefault: true };
+            if (callback) callback(res);
+            return Promise.resolve(res);
+        });
+
+        marklet = new Marklet();
+        await new Promise(resolve => setImmediate(resolve));
+
+        marklet.whiteboardActive = true;
+        marklet.ui.toggleWhiteboardMode(true);
+        marklet.updateObserverState();
+
+        assert.strictEqual(observeCalled, 1);
+        assert.strictEqual(marklet.observerPaused, false);
+
+        marklet.ui.dock.querySelector('#btn-exit-whiteboard').click();
+
+        assert.strictEqual(marklet.whiteboardActive, false);
+        assert.strictEqual(marklet.observerPaused, true);
+        assert.strictEqual(disconnectCalled, 1);
+
+        global.MutationObserver = OriginalObserver;
+    });
+
+    it('should remove the storage listener on destroy', async () => {
+        chrome.storage.local.get = mock.fn((keys, callback) => {
+            const res = { extensionEnabled: true, enableByDefault: true };
+            if (callback) callback(res);
+            return Promise.resolve(res);
+        });
+
+        marklet = new Marklet();
+        await new Promise(resolve => setImmediate(resolve));
+
+        const addedListener = chrome.storage.onChanged.addListener.mock.calls.at(-1).arguments[0];
+        marklet.destroyAll();
+
+        const removedCall = chrome.storage.onChanged.removeListener.mock.calls.find(call => call.arguments[0] === addedListener);
+        assert.ok(removedCall);
+    });
 });

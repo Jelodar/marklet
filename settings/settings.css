@@ -63,11 +63,6 @@ header {
     letter-spacing: -0.5px;
 }
 
-.header-actions {
-    display: flex;
-    gap: 12px;
-}
-
 .btn {
     padding: 8px 16px;
     border-radius: 6px;
@@ -101,15 +96,6 @@ header {
     background-color: var(--danger-hover);
 }
 
-.btn-link {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    text-decoration: underline;
-    font-size: 13px;
-}
-
 .settings-section {
     background-color: var(--card-bg);
     border: 1px solid var(--border-color);
@@ -125,27 +111,6 @@ header {
     margin-top: 0;
     margin-bottom: 16px;
     padding-bottom: 12px;
-}
-
-.settings-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-}
-
-.setting-card {
-    background-color: var(--card-bg);
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-    border: 1px solid var(--border-color);
-}
-
-.setting-card h3 {
-    font-size: 16px;
-    margin-top: 0;
-    margin-bottom: 16px;
-    color: var(--primary-color);
 }
 
 .setting-item {
@@ -243,14 +208,6 @@ input:checked + .slider {
 
 input:checked + .slider:before {
     transform: translateX(20px);
-}
-
-/* Pages List */
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
 }
 
 .search-bar {
@@ -471,14 +428,6 @@ footer {
     margin-top: 60px;
     padding-top: 24px;
     border-top: 1px solid var(--border-color);
-}
-
-.footer-content {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 13px;
-    color: var(--text-muted);
 }
 
 .hotkey-input {

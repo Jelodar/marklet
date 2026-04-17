@@ -4,6 +4,11 @@ const { Highlighter } = require('../content/highlighter.js');
 const { CONSTANTS } = require('../utils/consts.js');
 
 global.CONSTANTS = CONSTANTS;
+global.window = { location: { href: 'http://example.com' } };
+global.SharedUtils = {
+    normalizeUrl: (url) => url,
+    normalizePageData: (page, url) => ({ url: url || '', highlights: [], drawings: [], ...(page || {}) })
+};
 
 class MockHighlighter extends Highlighter {
     constructor() {

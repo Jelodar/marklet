@@ -10,14 +10,28 @@ describe('Background Script', () => {
         listeners = {
             onInstalled: [],
             onClicked: [],
+            onMessage: [],
             onHistoryStateUpdated: [],
             onReferenceFragmentUpdated: []
+        };
+
+        global.tinyIDB = {
+            keys: mock.fn(async () => []),
+            entries: mock.fn(async () => []),
+            raw: {
+                get: mock.fn(async () => undefined),
+                getBatch: mock.fn(async () => []),
+                set: mock.fn(async () => undefined),
+                remove: mock.fn(async () => undefined),
+                update: mock.fn(async () => undefined),
+                clear: mock.fn(async () => undefined)
+            }
         };
         
         global.chrome = {
             runtime: {
                 onInstalled: { addListener: fn => listeners.onInstalled.push(fn) },
-                onMessage: { addListener: mock.fn() }
+                onMessage: { addListener: fn => listeners.onMessage.push(fn) }
             },
             contextMenus: {
                 create: mock.fn(),
@@ -69,5 +83,16 @@ describe('Background Script', () => {
         
         assert.strictEqual(global.chrome.tabs.sendMessage.mock.calls.length, 2);
         assert.deepStrictEqual(global.chrome.tabs.sendMessage.mock.calls[1].arguments[1], { type: 'URL_CHANGED', url: 'http://example.com/page#frag' });
+    });
+
+    it('should return structured db errors', async () => {
+        const onMessage = listeners.onMessage[0];
+        global.tinyIDB.raw.get = mock.fn(async () => {
+            throw new Error('db failed');
+        });
+
+        const response = await new Promise(resolve => onMessage({ type: 'DB_GET', key: 'page:http://example.com' }, {}, resolve));
+
+        assert.deepStrictEqual(response, { ok: false, error: 'db failed' });
     });
 });

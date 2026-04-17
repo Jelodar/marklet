@@ -69,6 +69,29 @@ describe('Marklet Hotkeys & Delete Handling', () => {
         assert.notStrictEqual(marklet.whiteboardActive, initialStatus, "Alt+Shift+W should toggle whiteboard");
     });
 
+    it('should update hotkeys from storage changes without re-reading storage on keydown', async () => {
+        let applyHighlightCalled = false;
+        marklet.highlighter.applyHighlight = () => { applyHighlightCalled = true; };
+        marklet.highlighter.isValidSelection = () => true;
+
+        const listeners = chrome.storage.onChanged.addListener.mock.calls.map(call => call.arguments[0]);
+        listeners.forEach(listener => listener({ hotkeys: { newValue: { highlight: 'Alt+J' } } }));
+
+        const callsBeforeKeydown = chrome.storage.local.get.mock.calls.length;
+        const event = new window.KeyboardEvent('keydown', {
+            key: 'j',
+            code: 'KeyJ',
+            altKey: true,
+            bubbles: true
+        });
+
+        document.dispatchEvent(event);
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        assert.strictEqual(applyHighlightCalled, true, "Updated hotkey should trigger highlight");
+        assert.strictEqual(chrome.storage.local.get.mock.calls.length, callsBeforeKeydown, "Keydown should not fetch hotkeys from storage");
+    });
+
     it('should hide drawing toolbar when Delete key is pressed on selected stroke', async () => {
         marklet.whiteboard.active = true;
         marklet.whiteboardActive = true;

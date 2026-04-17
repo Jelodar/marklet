@@ -32,6 +32,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.documentElement.setAttribute('data-theme', theme || 'light');
     }
   };
+  const renderEmptyState = (container, text) => {
+    const empty = document.createElement('div');
+    empty.style.color = 'var(--text-muted)';
+    empty.style.textAlign = 'center';
+    empty.style.padding = '10px';
+    empty.textContent = text;
+    container.replaceChildren(empty);
+  };
 
   openSettingsBtn.onclick = () => chrome.runtime.openOptionsPage();
   appTitleLabel.onclick = () => {
@@ -40,12 +48,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   const safeSendMessage = (tabId, message, callback) => {
-    if (!tabId) return;
+    if (!tabId) {
+      if (callback) callback(undefined, true);
+      return;
+    }
     chrome.tabs.sendMessage(tabId, message, (response) => {
       if (chrome.runtime.lastError) {
         void chrome.runtime.lastError.message;
+        if (callback) callback(undefined, true);
       } else if (callback) {
-        callback(response);
+        callback(response, false);
       }
     });
   };
@@ -53,6 +65,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const data = await chrome.storage.local.get([
     'extensionEnabled',
     'enableByDefault',
+    'urlHashMode',
+    'urlHashSiteModes',
     'disabledSites',
     'enabledSites',
     'highlightsVisible',
@@ -63,6 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     'theme'
   ]);
 
+  SharedUtils.setUrlNormalizationSettings(data);
   applyTheme(data.theme || 'system');
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -76,12 +91,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isRestricted) {
       const hint = document.createElement('div');
       hint.style.cssText = "background: var(--secondary-bg); color: var(--text-color); padding: 8px; border-radius: 4px; font-size: 11px; margin-bottom: 12px; border: 1px solid var(--border-color); opacity: 0.8;";
-      hint.innerHTML = "This page is restricted by the browser. Annotations are not possible here.";
+      hint.textContent = "This page is restricted by the browser. Annotations are not possible here.";
       document.body.insertBefore(hint, document.querySelector('.header').nextSibling);
     } else if (!isSavable) {
       const hint = document.createElement('div');
       hint.style.cssText = "background: var(--secondary-bg); color: var(--text-color); padding: 8px; border-radius: 4px; font-size: 11px; margin-bottom: 12px; border: 1px solid var(--border-color); opacity: 0.8;";
-      hint.innerHTML = "This page type doesn't support saving. Your annotations will be lost on reload.";
+      hint.textContent = "This page type does not support saving. Annotations will be lost on reload.";
       document.body.insertBefore(hint, document.querySelector('.header').nextSibling);
     }
   }
@@ -210,56 +225,70 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const renderHighlights = async () => {
     if (!tab || !currentUrl) return;
-    const pageData = await tinyIDB.get(currentUrl);
-    const pageHighlights = pageData?.highlights || [];
-    const pageDrawings = pageData?.drawings || [];
+    const pageData = SharedUtils.normalizePageData(await tinyIDB.get(currentUrl), currentUrl);
+    const pageHighlights = pageData.highlights;
+    const pageDrawings = pageData.drawings;
     
     highlightsCountBadge.textContent = pageHighlights.length;
     drawingsCountBadge.textContent = pageDrawings.length;
 
     if (pageHighlights.length > 0) {
-      highlightsList.innerHTML = pageHighlights.map(h => `
-        <div class="highlight-item" style="border-left: 4px solid ${h.color};">
-          <div class="highlight-text" title="${(h.text || '').replace(/"/g, '&quot;')}">${h.text || "No text content"}</div>
-          <div class="highlight-actions">
-            <button class="action-btn btn-goto" data-id="${h.id}">Go To</button>
-            <button class="action-btn btn-copy" data-text="${(h.text || '').replace(/"/g, '&quot;')}">Copy</button>
-            <button class="action-btn btn-delete" data-id="${h.id}">Delete</button>
-          </div>
-        </div>
-      `).join('');
-      highlightsList.querySelectorAll('.btn-goto').forEach(btn => {
-        btn.onclick = () => safeSendMessage(tab.id, { type: 'GOTO_HIGHLIGHT', id: btn.dataset.id });
-      });
-      highlightsList.querySelectorAll('.btn-copy').forEach(btn => {
-        btn.onclick = () => {
-          navigator.clipboard.writeText(btn.dataset.text);
-          const originalText = btn.innerText;
-          btn.innerText = 'Copied!';
-          setTimeout(() => btn.innerText = originalText, 1500);
+      const fragment = document.createDocumentFragment();
+      pageHighlights.forEach((highlight) => {
+        const item = document.createElement('div');
+        item.className = 'highlight-item';
+        item.style.borderLeft = `4px solid ${highlight.color || 'transparent'}`;
+
+        const text = document.createElement('div');
+        const textValue = highlight.text || 'No text content';
+        text.className = 'highlight-text';
+        text.title = textValue;
+        text.textContent = textValue;
+
+        const actions = document.createElement('div');
+        actions.className = 'highlight-actions';
+
+        const gotoButton = document.createElement('button');
+        gotoButton.className = 'action-btn btn-goto';
+        gotoButton.textContent = 'Go To';
+        gotoButton.onclick = () => safeSendMessage(tab.id, { type: 'GOTO_HIGHLIGHT', id: highlight.id });
+
+        const copyButton = document.createElement('button');
+        copyButton.className = 'action-btn btn-copy';
+        copyButton.textContent = 'Copy';
+        copyButton.onclick = () => {
+          navigator.clipboard.writeText(highlight.text || '');
+          const originalText = copyButton.innerText;
+          copyButton.innerText = 'Copied';
+          setTimeout(() => copyButton.innerText = originalText, 1500);
         };
-      });
-      highlightsList.querySelectorAll('.btn-delete').forEach(btn => {
-        btn.onclick = async () => {
-          const pData = await tinyIDB.get(currentUrl);
-          if (pData) {
-            pData.highlights = pData.highlights.filter(item => item.id !== btn.dataset.id);
-            if (pData.highlights.length === 0 && (!pData.drawings || pData.drawings.length === 0)) await tinyIDB.remove(currentUrl);
-            else await tinyIDB.set(currentUrl, pData);
-            renderHighlights();
-            safeSendMessage(tab.id, { type: 'LOAD_HIGHLIGHTS' });
-          }
+
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'action-btn btn-delete';
+        deleteButton.textContent = 'Delete';
+        deleteButton.onclick = async () => {
+          const normalizedPage = SharedUtils.normalizePageData(await tinyIDB.get(currentUrl), currentUrl);
+          normalizedPage.highlights = normalizedPage.highlights.filter(item => item.id !== highlight.id);
+          if (normalizedPage.highlights.length === 0 && normalizedPage.drawings.length === 0) await tinyIDB.remove(currentUrl);
+          else await tinyIDB.set(currentUrl, normalizedPage);
+          renderHighlights();
+          safeSendMessage(tab.id, { type: 'LOAD_HIGHLIGHTS' });
         };
+
+        actions.append(gotoButton, copyButton, deleteButton);
+        item.append(text, actions);
+        fragment.appendChild(item);
       });
+      highlightsList.replaceChildren(fragment);
     } else {
-      highlightsList.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 10px;">No highlights yet</div>`;
+      renderEmptyState(highlightsList, 'No highlights yet');
     }
   };
 
   async function syncTabData(tab) {
     return new Promise((fullfull) => {
-      safeSendMessage(tab.id, { type: 'GET_STATE' }, (response) => {
-        if (!response) return fullfull(false);
+      safeSendMessage(tab.id, { type: 'GET_STATE' }, (response, failed) => {
+        if (failed || !response) return fullfull(false);
         whiteboardToggle.checked = !!(response.whiteboardActive);
         updateAllowSelectionLabel(!!(response.selectionOverrideActive));
         fullfull(true);
@@ -271,6 +300,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     overrideSelectBtn.textContent = (isEnabled ? 'Revert Text Selection Settings' : 'Make All Text Selectable');
   }
 
+  updateAllowSelectionLabel(false);
   renderHighlights();
 
   extensionEnableToggle.addEventListener('change', async (e) => {
@@ -348,27 +378,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   clearAllHighlightsBtn.addEventListener('click', async () => {
     if (confirm('Clear all highlights on this page?')) {
-      const pData = await tinyIDB.get(currentUrl);
-      if (pData) {
-        pData.highlights = [];
-        if (pData.drawings.length === 0) await tinyIDB.remove(currentUrl);
-        else await tinyIDB.set(currentUrl, pData);
-        renderHighlights();
-        safeSendMessage(tab.id, { type: 'LOAD_HIGHLIGHTS' });
-      }
+      const pageData = SharedUtils.normalizePageData(await tinyIDB.get(currentUrl), currentUrl);
+      pageData.highlights = [];
+      if (pageData.drawings.length === 0) await tinyIDB.remove(currentUrl);
+      else await tinyIDB.set(currentUrl, pageData);
+      renderHighlights();
+      safeSendMessage(tab.id, { type: 'LOAD_HIGHLIGHTS' });
     }
   });
 
   clearAllDrawingsBtn.addEventListener('click', async () => {
     if (confirm('Clear all drawings on this page?')) {
-      const pData = await tinyIDB.get(currentUrl);
-      if (pData) {
-        pData.drawings = [];
-        if (pData.highlights.length === 0) await tinyIDB.remove(currentUrl);
-        else await tinyIDB.set(currentUrl, pData);
-        renderHighlights();
-        safeSendMessage(tab.id, { type: 'CLEAR_DRAWINGS' });
-      }
+      const pageData = SharedUtils.normalizePageData(await tinyIDB.get(currentUrl), currentUrl);
+      pageData.drawings = [];
+      if (pageData.highlights.length === 0) await tinyIDB.remove(currentUrl);
+      else await tinyIDB.set(currentUrl, pageData);
+      renderHighlights();
+      safeSendMessage(tab.id, { type: 'CLEAR_DRAWINGS' });
     }
   });
 

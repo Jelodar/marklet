@@ -64,6 +64,35 @@
             </section>
 
             <section class="settings-section">
+                <h2>Page Identity</h2>
+                <div class="setting-item">
+                    <div class="setting-info">
+                        <span>URL Fragments</span>
+                        <div class="setting-hint">Ignore `#...` by default. Include it for apps that route inside the fragment.</div>
+                    </div>
+                    <select id="url-hash-mode">
+                        <option value="ignore">Ignore by Default</option>
+                        <option value="include">Include by Default</option>
+                    </select>
+                </div>
+                <div class="setting-item" style="display: block;">
+                    <div class="setting-info" style="margin-bottom: 12px;">
+                        <span>Site Overrides</span>
+                        <div class="setting-hint">Use a hostname or full URL. Overrides win over the global fragment rule.</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                        <input type="text" id="url-hash-site-input" placeholder="example.com" style="flex: 1 1 220px; min-width: 0;">
+                        <select id="url-hash-site-mode" style="flex: 0 0 180px;">
+                            <option value="include">Include hash</option>
+                            <option value="ignore">Ignore hash</option>
+                        </select>
+                        <button id="url-hash-site-add" class="btn secondary" type="button">Save Rule</button>
+                    </div>
+                    <div id="url-hash-site-list"></div>
+                </div>
+            </section>
+
+            <section class="settings-section">
                 <h2>Highlights</h2>
                 <div class="setting-item">
                     <div class="setting-info">
@@ -119,8 +148,8 @@
                         <div class="setting-hint">Adjust the transparency of your whiteboard annotations.</div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <input type="range" id="drawing-opacity" min="1" max="100" value="100">
-                        <span id="draw-opacity-val" style="font-size: 12px; min-width: 24px;">100</span>
+                        <input type="range" id="drawing-opacity" min="1" max="100" value="75">
+                        <span id="draw-opacity-val" style="font-size: 12px; min-width: 24px;">75</span>
                     </div>
                 </div>
                 <div class="setting-item">
@@ -131,7 +160,7 @@
                     <select id="blend-mode-select">
                         <option value="normal">Normal</option>
                         <option value="multiply">Multiply</option>
-                        <option value="screen" selected>Screen</option>
+                        <option value="screen">Screen</option>
                         <option value="overlay">Overlay</option>
                         <option value="darken">Darken</option>
                         <option value="lighten">Lighten</option>
@@ -199,14 +228,15 @@
             </section>
             
             <div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
-                <button id="reset-defaults-btn" class="btn danger">Reset all to default</button>
+                <button id="reset-defaults-btn" class="btn danger">Reset all settings to default</button>
             </div>
         </main>
         <footer>
-            Made with ❤️ by <a href="https://jelodar.com" target="_blank">Reza Jelodar</a> · <a href="https://github.com/Jelodar/marklet" target="_blank">Source Code</a>
+            Built by <a href="https://jelodar.com" target="_blank">Reza Jelodar</a> · <a href="https://github.com/Jelodar/marklet" target="_blank">Source Code</a>
         </footer>
     </div>
     <script src="../utils/tiny-idb.js"></script>
+    <script src="../utils/page-storage.js"></script>
     <script src="../utils/shared.js"></script>
     <script src="settings.js"></script>
 </body>
