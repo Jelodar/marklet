@@ -2,6 +2,13 @@ const { describe, it, afterEach, mock } = require('node:test');
 const assert = require('assert');
 const { Marklet } = require('../content/marklet.js');
 
+global.SharedUI = {
+  init: mock.fn(),
+  confirm: mock.fn(),
+  alert: mock.fn(),
+  toast: mock.fn()
+};
+
 global.chrome = {
   runtime: {
     id: 'mock-id',

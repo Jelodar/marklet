@@ -1,26 +1,46 @@
 class Whiteboard {
   constructor(app) {
     const drawingDefaults = SharedUtils.getDefaultDrawingSettings();
-    this.app = app; this.active = false; this.canvas = null; this.svg = null; this.strokes = []; this.history = []; this.color = "#FF0000"; this.lineWidth = 5; this.mode = "draw"; this.blendMode = drawingDefaults.blendMode; this.opacity = drawingDefaults.opacity; this.localPage = SharedUtils.normalizePageData({ drawings: [] }, SharedUtils.normalizeUrl(window.location.href)); this.init();
+    this.app = app; this.active = false; this.canvas = null; this.svg = null; this.strokes = []; this.history = []; this.color = SharedUtils.getDefaultDrawColor(); this.lineWidth = 5; this.mode = "draw"; this.blendMode = drawingDefaults.blendMode; this.opacity = drawingDefaults.opacity; this.localPage = SharedUtils.normalizePageData({ drawings: [] }, SharedUtils.normalizeUrl(window.location.href)); this.init();
   }
   init() {
-    this.loadStrokes(); this.resizeListener = () => this.handleResize(); this.scrollListener = () => { if (this.active) this.redraw(); };
+    this.loadStrokes();
+    this.resizeListener = () => { this.handleResize(); this.repositionTextInput(); };
+    this.scrollListener = () => {
+      if (!this.active || this.scrollFrame) return;
+      this.scrollFrame = requestAnimationFrame(() => {
+        this.scrollFrame = 0;
+        if (this.active) {
+            this.redraw();
+            this.repositionTextInput();
+        }
+      });
+    };
     window.addEventListener("resize", this.resizeListener); window.addEventListener("scroll", this.scrollListener, { passive: true });
     this.storageListener = (c) => {
-        if (c.drawingBlendMode && SharedUtils.isValidExtension()) { this.blendMode = c.drawingBlendMode.newValue; if (this.canvas) this.canvas.style.mixBlendMode = this.blendMode; if (this.svg) this.svg.style.mixBlendMode = this.blendMode; }
-        if (c.drawingOpacity && SharedUtils.isValidExtension()) { this.opacity = c.drawingOpacity.newValue; if (this.canvas) this.canvas.style.opacity = this.opacity / 100; if (this.svg) this.svg.style.opacity = this.opacity / 100; }
+        if (c.drawingBlendMode && SharedUtils.isValidExtension()) {
+          this.blendMode = SharedUtils.sanitizeStoredSettings({ drawingBlendMode: c.drawingBlendMode.newValue }).drawingBlendMode;
+          if (this.canvas) this.canvas.style.mixBlendMode = this.blendMode;
+          if (this.svg) this.svg.style.mixBlendMode = this.blendMode;
+        }
+        if (c.drawingOpacity && SharedUtils.isValidExtension()) {
+          this.opacity = SharedUtils.sanitizeStoredSettings({ drawingOpacity: c.drawingOpacity.newValue }).drawingOpacity;
+          if (this.canvas) this.canvas.style.opacity = this.opacity / 100;
+          if (this.svg) this.svg.style.opacity = this.opacity / 100;
+        }
     };
-    chrome.storage.onChanged.addListener(this.storageListener); this.loadDefaultColor(); this.loadBlendMode(); this.loadOpacity();
+    chrome.storage.onChanged.addListener(this.storageListener); this.loadDefaultColor(); this.loadBlendMode(); this.loadOpacity(); this.loadLastTool();
   }
   destroy() {
       window.removeEventListener("resize", this.resizeListener); window.removeEventListener("scroll", this.scrollListener); chrome.storage.onChanged.removeListener(this.storageListener);
-      if (this.focusTimer) cancelAnimationFrame(this.focusTimer); this.toggle(false); if (this.svg) { this.svg.remove(); this.svg = null; }
+      if (this.focusTimer) cancelAnimationFrame(this.focusTimer); if (this.scrollFrame) cancelAnimationFrame(this.scrollFrame); this.scrollFrame = 0; this.toggle(false); if (this.svg) { this.svg.remove(); this.svg = null; }
   }
-  async loadDefaultColor() { if (SharedUtils.isValidExtension()) { const d = await chrome.storage.local.get(["defaultDrawColor"]); if (d.defaultDrawColor) this.color = d.defaultDrawColor; } }
+  async loadLastTool() { if (SharedUtils.isValidExtension()) { const d = SharedUtils.sanitizeStoredSettings(await chrome.storage.local.get(["lastWhiteboardTool"])); this.mode = d.lastWhiteboardTool; if (this.active && this.app.ui) this.app.ui.setTool(this.mode); } }
+  async loadDefaultColor() { if (SharedUtils.isValidExtension()) { const d = SharedUtils.sanitizeStoredSettings(await chrome.storage.local.get(["defaultDrawColor"])); this.color = d.defaultDrawColor; } }
   async loadBlendMode() {
     if (!SharedUtils.isValidExtension()) return;
-    const d = await chrome.storage.local.get(["drawingBlendMode"]);
-    if (d.drawingBlendMode) this.blendMode = d.drawingBlendMode;
+    const d = SharedUtils.sanitizeStoredSettings(await chrome.storage.local.get(["drawingBlendMode"]));
+    this.blendMode = d.drawingBlendMode;
     if (this.canvas) this.canvas.style.mixBlendMode = this.blendMode; if (this.svg) this.svg.style.mixBlendMode = this.blendMode;
     if (this.app.ui) this.app.ui.updateDockBlendText(this.blendMode);
   }
@@ -28,7 +48,7 @@ class Whiteboard {
     this.blendMode = m; if (this.canvas) this.canvas.style.mixBlendMode = m; if (this.svg) this.svg.style.mixBlendMode = m;
     if (SharedUtils.isValidExtension()) await chrome.storage.local.set({ drawingBlendMode: m });
   }
-  async loadOpacity() { if (SharedUtils.isValidExtension()) { const d = await chrome.storage.local.get(["drawingOpacity"]); if (d.drawingOpacity !== undefined) { this.opacity = d.drawingOpacity; if (this.canvas) this.canvas.style.opacity = this.opacity / 100; if (this.svg) this.svg.style.opacity = this.opacity / 100; } } }
+  async loadOpacity() { if (SharedUtils.isValidExtension()) { const d = SharedUtils.sanitizeStoredSettings(await chrome.storage.local.get(["drawingOpacity"])); this.opacity = d.drawingOpacity; if (this.canvas) this.canvas.style.opacity = this.opacity / 100; if (this.svg) this.svg.style.opacity = this.opacity / 100; } }
   setupCanvas() {
     if (this.canvas) return; if (this.svg) { this.svg.remove(); this.svg = null; }
     this.canvas = Object.assign(document.createElement("canvas"), { id: "marklet-canvas-main" });
@@ -106,12 +126,24 @@ class Whiteboard {
     }
     if (this.svg) this.updateSVGSize();
   }
+  repositionTextInput() {
+    const input = this.app.shadow.querySelector('.marklet-text-input');
+    if (input && this.editStroke) {
+      const rect = document.documentElement.getBoundingClientRect();
+      input.style.left = `${this.editStroke.x + rect.left}px`;
+      input.style.top = `${this.editStroke.y + rect.top}px`;
+    }
+  }
   toggle(a) {
+    if (!a && this.active) {
+        const input = this.app.shadow.querySelector('.marklet-text-input');
+        if (input) input.blur();
+    }
     this.active = a;
     if (a) { if (this.svg) { this.svg.remove(); this.svg = null; } this.setupCanvas(); if (this.canvas) this.canvas.style.pointerEvents = "all"; this.updateCursor(); this.redraw(); }
     else { if (this.canvas) { this.canvas.remove(); this.canvas = null; this.ctx = null; } if (this.strokes.length > 0) this.renderSVG(); else if (this.svg) { this.svg.remove(); this.svg = null; } this.selectedStroke = null; if (this.app.ui) this.app.ui.hideDrawingToolbar(); }
   }
-  setMode(m) { this.mode = m; this.selectedStroke = null; this.hoveredStroke = null; this.interactionState = null; this.updateCursor(); this.redraw(); this.app.ui.updateDockPreview(); }
+  setMode(m) { this.mode = m; this.selectedStroke = null; this.hoveredStroke = null; this.interactionState = null; this.updateCursor(); this.redraw(); this.app.ui.updateDockPreview(); if (SharedUtils.isValidExtension()) chrome.storage.local.set({ lastWhiteboardTool: m }); }
   setThickness(v) {
     this.lineWidth = v;
     if (this.selectedStroke) {
@@ -153,6 +185,13 @@ class Whiteboard {
     const rect = document.documentElement.getBoundingClientRect();
     if (e.clientX !== undefined) return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     return { x: e.pageX || 0, y: e.pageY || 0 };
+  }
+  getShiftLockedPoint(start, point) {
+    if (!start) return point;
+    if (!this.shiftLockDir) this.shiftLockDir = Math.abs(point.x - start.x) >= Math.abs(point.y - start.y) ? "h" : "v";
+    return this.shiftLockDir === "h"
+      ? { x: point.x, y: start.y }
+      : { x: start.x, y: point.y };
   }
   handleDblClick(e) { if (this.mode === 'select' || this.mode === 'text') { const p = this.getMousePos(e), hit = this.hitTest(p.x, p.y); if (hit && hit.type === 'text') this.enterTextEditMode(hit); } }
   start(e) {
@@ -254,15 +293,13 @@ class Whiteboard {
     }
     if (this.isDrawing) {
       if (this.mode === "draw") {
-        if (e.shiftKey && this.currentStroke.points.length > 0) {
-          const last = this.currentStroke.points[this.currentStroke.points.length - 1];
-          if (!this.shiftLockDir) this.shiftLockDir = Math.abs(p.x - last.x) > Math.abs(p.y - last.y) ? 'h' : 'v';
-          if (this.shiftLockDir === 'h') p.y = last.y;
-          else p.x = last.x;
+        const start = this.currentStroke.points[0];
+        if (e.shiftKey && start) {
+          this.currentStroke.points = [start, this.getShiftLockedPoint(start, p)];
         } else {
           this.shiftLockDir = null;
+          this.currentStroke.points.push(p);
         }
-        this.currentStroke.points.push(p);
       } else {
         this.currentStroke.points[1] = p;
       }
@@ -272,7 +309,20 @@ class Whiteboard {
   end() {
     this.shiftLockDir = null;
     if (this.interactionState) { if (["move", "rotate", "resize"].includes(this.interactionState.type)) this.saveStrokes(); this.interactionState = null; if (this.selectedStroke && this.mode === "select") this.app.ui.showDrawingToolbar(this.selectedStroke); }
-    if (this.isDrawing) { this.isDrawing = false; this.strokes.push(this.currentStroke); this.history = []; this.saveStrokes(); this.redraw(); }
+    if (this.isDrawing) {
+      this.isDrawing = false;
+      const s = this.currentStroke;
+      let valid = false;
+      if (s.type === "draw") {
+        valid = s.points.length > 1 && s.points.some(p => p.x !== s.points[0].x || p.y !== s.points[0].y);
+      } else if (s.points[1]) {
+        valid = s.points[0].x !== s.points[1].x || s.points[0].y !== s.points[1].y;
+      }
+      if (valid) {
+        this.strokes.push(s); this.history = []; this.saveStrokes();
+      }
+      this.redraw();
+    }
   }
   tryErase(x, y) {
     const s = this.hitTest(x, y);
@@ -331,17 +381,9 @@ class Whiteboard {
     const url = SharedUtils.normalizeUrl(window.location.href);
     if (this.app.isSavable) {
       if (this.strokes.length === 0) {
-        const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
-        if (page) {
-          page.drawings = [];
-          if (!page.highlights || !page.highlights.length) await tinyIDB.remove(url);
-          else { page.lastUpdated = Date.now(); await tinyIDB.set(url, page); }
-        }
+        await PageStorage.update(url, 'clear_drawings');
       } else {
-        const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
-        page.drawings = this.strokes;
-        page.lastUpdated = Date.now();
-        await tinyIDB.set(url, page);
+        await PageStorage.update(url, 'replace_drawings', this.strokes);
       }
     } else { this.localPage.drawings = this.strokes; this.localPage.lastUpdated = Date.now(); }
   }
@@ -349,7 +391,7 @@ class Whiteboard {
     if (!SharedUtils.isValidExtension()) return;
     if (this.app.isSavable) {
       const url = SharedUtils.normalizeUrl(window.location.href);
-      const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
+      const page = SharedUtils.normalizePageData(await PageStorage.get(url), url);
       this.strokes = page.drawings;
     } else this.strokes = this.localPage.drawings || [];
     if (this.strokes.length > 0) { if (this.active) { this.setupCanvas(); this.redraw(); } else this.renderSVG(); }

@@ -64,7 +64,7 @@ describe('Reproduction: Highlight Shift on Content Change', () => {
         await marklet.highlighter.applyHighlight(range1, "yellow");
         
         const url = SharedUtils.normalizeUrl('http://localhost/');
-        const page = mockStorage.get(`idb_page:${url}`);
+        const page = mockStorage.get(`idb:${url}`);
         assert.ok(page, 'Page should be in storage');
         assert.strictEqual(page.highlights.length, 1);
         assert.strictEqual(page.highlights[0].text, 'quick');
@@ -86,7 +86,7 @@ describe('Reproduction: Highlight Shift on Content Change', () => {
         
         await marklet.highlighter.applyHighlight(range2, "green");
         
-        const pageAfter = mockStorage.get(`idb_page:${url}`);
+        const pageAfter = mockStorage.get(`idb:${url}`);
         const highlights = pageAfter.highlights;
         
         const quickHl = highlights.find(h => h.color === 'yellow');
@@ -112,7 +112,7 @@ describe('Reproduction: Highlight Shift on Content Change', () => {
         
         await marklet.highlighter.applyHighlight(range1, "yellow");
         
-        let page = mockStorage.get(`idb_page:${url}`);
+        let page = mockStorage.get(`idb:${url}`);
         assert.strictEqual(page.highlights.length, 1);
         const id1 = page.highlights[0].id;
 
@@ -133,7 +133,7 @@ describe('Reproduction: Highlight Shift on Content Change', () => {
 
         await marklet.highlighter.applyHighlight(range2, "green");
         
-        page = mockStorage.get(`idb_page:${url}`);
+        page = mockStorage.get(`idb:${url}`);
         assert.strictEqual(page.highlights.length, 2, 'Should have 2 highlights (1 resolved, 1 unresolved)');
         assert.ok(page.highlights.find(h => h.id === id1), 'Original unresolved highlight should be preserved');
     });

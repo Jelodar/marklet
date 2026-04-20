@@ -243,4 +243,67 @@ describe('Marklet', () => {
         const removedCall = chrome.storage.onChanged.removeListener.mock.calls.find(call => call.arguments[0] === addedListener);
         assert.ok(removedCall);
     });
+
+    it('should re-initialize on non-savable pages when re-enabled', async () => {
+        const isSavableMock = mock.method(SharedUtils, 'isSavable', () => false);
+        chrome.storage.local.get = mock.fn((keys, callback) => {
+            const res = { extensionEnabled: true, enableByDefault: true };
+            if (callback) callback(res);
+            return Promise.resolve(res);
+        });
+
+        marklet = new Marklet();
+        await new Promise(resolve => setImmediate(resolve));
+        await marklet.toggleExtension(false);
+
+        assert.strictEqual(marklet.whiteboard, null);
+
+        await marklet.toggleExtension(true);
+        await new Promise(resolve => setImmediate(resolve));
+
+        assert.ok(marklet.whiteboard);
+        assert.ok(marklet.highlighter);
+        isSavableMock.mock.restore();
+    });
+
+    it('should continue initialization when migration fails', async () => {
+        const migrateMock = mock.method(Marklet.prototype, 'migrateData', async () => {
+            throw new Error('migration failed');
+        });
+        const errorSpy = mock.method(console, 'error', () => {});
+        chrome.storage.local.get = mock.fn((keys, callback) => {
+            const res = { extensionEnabled: true, enableByDefault: true };
+            if (callback) callback(res);
+            return Promise.resolve(res);
+        });
+
+        marklet = new Marklet();
+        await new Promise(resolve => setImmediate(resolve));
+
+        assert.ok(marklet.whiteboard);
+        assert.ok(marklet.highlighter);
+        assert.ok(errorSpy.mock.calls.some(call => call.arguments[0] === 'Marklet migration failed'));
+
+        migrateMock.mock.restore();
+        errorSpy.mock.restore();
+    });
+
+    it('should apply an explicit selection override state without forcing pointer events', async () => {
+        chrome.storage.local.get = mock.fn((keys, callback) => {
+            const res = { extensionEnabled: true, enableByDefault: true };
+            if (callback) callback(res);
+            return Promise.resolve(res);
+        });
+
+        marklet = new Marklet();
+        await new Promise(resolve => setImmediate(resolve));
+
+        assert.strictEqual(marklet.toggleUserSelect(true), true);
+        const style = document.getElementById('marklet-user-select-override');
+        assert.ok(style);
+        assert.ok(style.textContent.includes('user-select: text !important;'));
+        assert.strictEqual(style.textContent.includes('pointer-events'), false);
+        assert.strictEqual(marklet.toggleUserSelect(false), false);
+        assert.strictEqual(document.getElementById('marklet-user-select-override'), null);
+    });
 });

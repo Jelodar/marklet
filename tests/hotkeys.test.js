@@ -69,6 +69,59 @@ describe('Marklet Hotkeys & Delete Handling', () => {
         assert.notStrictEqual(marklet.whiteboardActive, initialStatus, "Alt+Shift+W should toggle whiteboard");
     });
 
+    it('should consume matching hotkeys so the page cannot process them when whiteboard is off', async () => {
+        let applyHighlightCalled = false;
+        let immediateStopped = false;
+        let propagationStopped = false;
+        let defaultPrevented = false;
+        marklet.highlighter.applyHighlight = () => { applyHighlightCalled = true; };
+        marklet.highlighter.isValidSelection = () => true;
+
+        const event = new window.KeyboardEvent('keydown', {
+            key: 'h',
+            code: 'KeyH',
+            altKey: true,
+            bubbles: true,
+            cancelable: true
+        });
+
+        event.stopImmediatePropagation = () => { immediateStopped = true; };
+        event.stopPropagation = () => { propagationStopped = true; };
+        event.preventDefault = () => { defaultPrevented = true; };
+
+        document.dispatchEvent(event);
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        assert.strictEqual(applyHighlightCalled, true, "Matching hotkey should still trigger Marklet");
+        assert.strictEqual(immediateStopped, true, "Matching hotkey should stop immediate propagation");
+        assert.strictEqual(propagationStopped, true, "Matching hotkey should stop propagation");
+        assert.strictEqual(defaultPrevented, true, "Matching hotkey should prevent default");
+    });
+
+    it('should consume keyup for matching hotkeys so sites cannot react on release', async () => {
+        let immediateStopped = false;
+        let propagationStopped = false;
+        let defaultPrevented = false;
+
+        const event = new window.KeyboardEvent('keyup', {
+            key: 'h',
+            code: 'KeyH',
+            altKey: true,
+            bubbles: true,
+            cancelable: true
+        });
+
+        event.stopImmediatePropagation = () => { immediateStopped = true; };
+        event.stopPropagation = () => { propagationStopped = true; };
+        event.preventDefault = () => { defaultPrevented = true; };
+
+        document.dispatchEvent(event);
+
+        assert.strictEqual(immediateStopped, true, "Hotkey release should stop immediate propagation");
+        assert.strictEqual(propagationStopped, true, "Hotkey release should stop propagation");
+        assert.strictEqual(defaultPrevented, true, "Hotkey release should prevent default");
+    });
+
     it('should update hotkeys from storage changes without re-reading storage on keydown', async () => {
         let applyHighlightCalled = false;
         marklet.highlighter.applyHighlight = () => { applyHighlightCalled = true; };

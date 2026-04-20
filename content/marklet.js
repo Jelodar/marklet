@@ -26,25 +26,8 @@ class Scheduler {
 }
 class Marklet {
   constructor() {
-    this.injectGlobalStyles();
-    this.shadowHost = Object.assign(document.createElement("div"), { id: "marklet-root" });
-    Object.assign(this.shadowHost.style, {
-      position: "absolute",
-      top: "0",
-      left: "0",
-      width: "0",
-      height: "0",
-      margin: "0",
-      padding: "0",
-      border: "none",
-      overflow: "visible",
-      pointerEvents: "none",
-      zIndex: CONSTANTS.Z_INDEX_TOOLTIP,
-      all: "initial"
-    });
-    (document.documentElement || document.body).appendChild(this.shadowHost);
-    this.shadow = this.shadowHost.attachShadow({ mode: "open" });
-    this.initStyles();
+    this.shadowHost = null;
+    this.shadow = null;
     this.whiteboardActive = false;
     this.selectionOverrideActive = false;
     this.hasHighlights = false;
@@ -59,22 +42,25 @@ class Marklet {
     chrome.storage.local.get(["extensionEnabled", "enableByDefault", "disabledSites", "enabledSites", "urlHashMode", "urlHashSiteModes"], (res) => {
       if (this.destroyed) return;
       if (!SharedUtils.isValidExtension()) return;
-      SharedUtils.setUrlNormalizationSettings(res);
+      const settings = this.sanitizeStoredSettings(res);
+      SharedUtils.setUrlNormalizationSettings(settings);
       this.lastUrl = SharedUtils.normalizeUrl(window.location.href);
-      const isGloballyEnabled = res.extensionEnabled !== false;
+      const isGloballyEnabled = settings.extensionEnabled;
       if (!isGloballyEnabled) return;
-      const hostname = window.location.hostname;
-      const enableByDefault = res.enableByDefault !== false;
-      let shouldInit = false;
-      if (!this.isSavable) {
-        shouldInit = true;
-      } else if (enableByDefault) {
-        shouldInit = !res.disabledSites?.includes(hostname);
-      } else {
-        shouldInit = res.enabledSites?.includes(hostname);
-      }
-      if (shouldInit) this.initAll();
+      if (this.shouldInitForCurrentPage(settings)) this.initAll();
     });
+  }
+  shouldInitForCurrentPage(res = {}) {
+    if (!this.isSavable) return true;
+    const hostname = window.location.hostname;
+    const enableByDefault = res.enableByDefault !== false;
+    if (enableByDefault) return !res.disabledSites?.includes(hostname);
+    return !!res.enabledSites?.includes(hostname);
+  }
+  sanitizeStoredSettings(value) {
+    return typeof SharedUtils.sanitizeStoredSettings === "function"
+      ? SharedUtils.sanitizeStoredSettings(value)
+      : (value || {});
   }
   bindStorageListener() {
     this.storageChangeListener = (changes) => {
@@ -112,50 +98,9 @@ class Marklet {
     document.removeEventListener("mousedown", this.documentMouseDownListener);
     this.documentMouseDownListener = null;
   }
-  initAll() {
-    this.destroyed = false;
-    if (!this.storageChangeListener) this.bindStorageListener();
-    this.migrateData().then(() => {
-      if (this.destroyed) return;
-      if (this.highlighter) return;
-      this.whiteboard = new Whiteboard(this);
-      this.highlighter = new Highlighter(this);
-      this.ui = new UI(this.shadow, this);
-      this.bindDocumentMouseDown();
-      this.bindKeyboardEvents();
-      this.restoreState();
-      this.initObserver();
-      this.lastUrl = SharedUtils.normalizeUrl(window.location.href);
-      const load = () => {
-        this.highlighter.loadHighlights(true).then(() => {
-          this.updateObserverState();
-        });
-      };
-      if (document.readyState === "complete") {
-        load();
-      } else {
-        this.pendingLoadListener = () => {
-          window.removeEventListener("load", this.pendingLoadListener);
-          this.pendingLoadListener = null;
-          load();
-        };
-        window.addEventListener("load", this.pendingLoadListener);
-      }
-    });
-  }
-  destroyAll() {
-    this.destroyed = true;
-    if (this.pendingLoadListener) {
-      window.removeEventListener("load", this.pendingLoadListener);
-      this.pendingLoadListener = null;
-    }
-    this.unbindDocumentMouseDown();
-    this.pauseObserver();
-    if (this.ui) { this.ui.destroy(); this.ui.container.remove(); this.ui.absoluteContainer.remove(); this.ui = null; }
-    if (this.whiteboard) { this.whiteboard.destroy(); this.whiteboard.canvas?.remove(); this.whiteboard = null; }
-    if (this.highlighter) { this.highlighter.destroy(); this.highlighter = null; }
-    DOMUtils.stripHighlights();
-    this.shadowHost.remove();
+  ensureShadowHost() {
+    if (this.shadowHost && document.contains(this.shadowHost)) return;
+    this.injectGlobalStyles();
     this.shadowHost = Object.assign(document.createElement("div"), { id: "marklet-root" });
     Object.assign(this.shadowHost.style, {
       position: "absolute",
@@ -174,6 +119,69 @@ class Marklet {
     (document.documentElement || document.body).appendChild(this.shadowHost);
     this.shadow = this.shadowHost.attachShadow({ mode: "open" });
     this.initStyles();
+    SharedUI.init(this.shadow);
+  }
+  initAll() {
+    this.destroyed = false;
+    this.ensureShadowHost();
+    if (!this.storageChangeListener) this.bindStorageListener();
+    const start = async () => {
+      try {
+        await this.migrateData();
+      } catch (error) {
+        console.error("Marklet migration failed", error);
+      }
+      if (this.destroyed || this.highlighter) return;
+      this.whiteboard = new Whiteboard(this);
+      this.highlighter = new Highlighter(this);
+      this.ui = new UI(this.shadow, this);
+      this.bindDocumentMouseDown();
+      this.bindKeyboardEvents();
+      try {
+        await this.restoreState();
+      } catch (error) {
+        console.error("Marklet state restore failed", error);
+      }
+      this.initObserver();
+      this.lastUrl = SharedUtils.normalizeUrl(window.location.href);
+      const load = async () => {
+        try {
+          await this.highlighter.loadHighlights();
+        } catch (error) {
+          console.error("Marklet highlight load failed", error);
+        }
+        this.updateObserverState();
+      };
+      if (document.readyState === "complete") {
+        load();
+      } else {
+        this.pendingLoadListener = () => {
+          window.removeEventListener("load", this.pendingLoadListener);
+          this.pendingLoadListener = null;
+          load();
+        };
+        window.addEventListener("load", this.pendingLoadListener);
+      }
+    };
+    start();
+  }
+  destroyAll() {
+    this.destroyed = true;
+    if (this.pendingLoadListener) {
+      window.removeEventListener("load", this.pendingLoadListener);
+      this.pendingLoadListener = null;
+    }
+    this.unbindDocumentMouseDown();
+    this.pauseObserver();
+    if (this.ui) { this.ui.destroy(); this.ui = null; }
+    if (this.whiteboard) { this.whiteboard.destroy(); this.whiteboard = null; }
+    if (this.highlighter) { this.highlighter.destroy(); this.highlighter = null; }
+    DOMUtils.stripHighlights();
+    if (this.shadowHost) {
+      this.shadowHost.remove();
+      this.shadowHost = null;
+      this.shadow = null;
+    }
     if (this.keyListener) {
       window.removeEventListener("keydown", this.keyListener, true);
       window.removeEventListener("keyup", this.keyListener, true);
@@ -193,7 +201,7 @@ class Marklet {
     return true;
   }
   handleUrlChange() {
-    if (this.highlighter) this.highlighter.loadHighlights(true).then(() => this.updateObserverState());
+    if (this.highlighter) this.highlighter.loadHighlights().then(() => this.updateObserverState());
     if (this.whiteboard) { this.whiteboard.loadStrokes(); this.whiteboard.handleResize(); }
   }
   async migrateData() {
@@ -212,12 +220,12 @@ class Marklet {
     }
 
     for (const [url, data] of Object.entries(pages)) {
-      await tinyIDB.set(url, SharedUtils.normalizePageData(data, url));
+      await PageStorage.set(url, SharedUtils.normalizePageData(data, url));
     }
     await chrome.storage.local.remove("pages");
   }
   initObserver() {
-    this.scheduler = new Scheduler(() => this.highlighter.loadHighlights(true));
+    this.scheduler = new Scheduler(() => this.highlighter.loadHighlights());
     this.observerCallback = (m) => {
       if (this.ui && this.ui.selectionTarget) {
         const isRemoved = !document.contains(this.ui.selectionTarget);
@@ -272,14 +280,14 @@ class Marklet {
       if (!SharedUtils.isValidExtension()) return;
       if (m.type === "GET_HIGHLIGHTS") {
         const url = SharedUtils.normalizeUrl(window.location.href);
-        tinyIDB.get(url).then(page => {
+        PageStorage.get(url).then(page => {
           sendResponse({ highlights: SharedUtils.normalizePageData(page, url).highlights });
         });
         return true;
       }
       if (m.type === "CLEAR_HIGHLIGHTS") {
         const url = SharedUtils.normalizeUrl(window.location.href);
-        tinyIDB.update(url, 'clear_highlights').then(() => {
+        PageStorage.update(url, 'clear_highlights').then(() => {
           this.highlighter.loadHighlights();
           sendResponse({ success: true });
         });
@@ -287,13 +295,16 @@ class Marklet {
       }
       if (m.type === "PAGE_UPDATED_SYNC") {
         if (SharedUtils.normalizeUrl(window.location.href) === m.url) {
-          if (this.highlighter) this.highlighter.loadHighlights(true).then(() => this.updateObserverState());
-          if (this.whiteboard) this.whiteboard.loadStrokes();
+          if (this.highlighter) this.highlighter.loadHighlights().then(() => this.updateObserverState());
+          if (this.whiteboard) { this.whiteboard.loadStrokes(); }
         }
       }
       if (m.type === "TOGGLE_EXTENSION") this.toggleExtension(m.active);
       if (m.type === "TOGGLE_SITE_ENABLED") this.toggleSiteEnabled(m.active);
-      if (m.type === "TOGGLE_USER_SELECT") this.toggleUserSelect(m.active);
+      if (m.type === "TOGGLE_USER_SELECT") {
+        sendResponse({ selectionOverrideActive: this.toggleUserSelect(m.active) });
+        return true;
+      }
       if (!this.ui || !this.highlighter) {
         if (m.type === "GET_STATE") sendResponse({ whiteboardActive: false, selectionOverrideActive: this.selectionOverrideActive });
         return;
@@ -324,19 +335,26 @@ class Marklet {
       }
     });
   }
-  toggleUserSelect() {
+  toggleUserSelect(active) {
     let style = document.getElementById('marklet-user-select-override');
-    this.selectionOverrideActive = !style;
-    if (this.selectionOverrideActive) {
+    const nextActive = typeof active === 'boolean' ? active : !style;
+    if (nextActive) {
+      if (style) {
+        this.selectionOverrideActive = true;
+        return true;
+      }
       style = document.createElement('style');
-      style.textContent = `* { user-select: text !important; -webkit-user-select: text !important; pointer-events: auto !important; }`;
+      style.textContent = `* { user-select: text !important; -webkit-user-select: text !important; }`;
       style.id = 'marklet-user-select-override';
       document.head.appendChild(style);
+      this.selectionOverrideActive = true;
       if (this.ui) this.ui.showNotification("Selection override enabled");
     } else {
       if (style) style.remove();
+      this.selectionOverrideActive = false;
       if (this.ui) this.ui.showNotification("Selection override disabled");
     }
+    return this.selectionOverrideActive;
   }
   bindKeyboardEvents() {
     this.keyListener = (e) => this.handleKey(e);
@@ -346,16 +364,8 @@ class Marklet {
   }
   async toggleExtension(active) {
     if (active) {
-      const d = await chrome.storage.local.get(["disabledSites", "enabledSites", "enableByDefault"]);
-      const enableByDefault = d.enableByDefault !== false;
-      const hostname = window.location.hostname;
-      let shouldInit = false;
-      if (enableByDefault) {
-        shouldInit = !d.disabledSites?.includes(hostname);
-      } else {
-        shouldInit = d.enabledSites?.includes(hostname);
-      }
-      if (shouldInit) this.initAll();
+      const d = this.sanitizeStoredSettings(await chrome.storage.local.get(["disabledSites", "enabledSites", "enableByDefault"]));
+      if (this.shouldInitForCurrentPage(d)) this.initAll();
     } else {
       this.destroyAll();
     }
@@ -364,84 +374,88 @@ class Marklet {
     if (active) this.initAll();
     else this.destroyAll();
   }
+  consumeKeyEvent(e, preventDefault = true) {
+    e.stopImmediatePropagation();
+    e.stopPropagation();
+    if (preventDefault) e.preventDefault();
+  }
+  getMatchedHotkeyAction(e) {
+    const hotkeys = this.hotkeys || SharedUtils.getDefaultHotkeys();
+    const checkKey = (hotkey) => {
+      const parsed = SharedUtils.parseHotkey(hotkey);
+      if (!parsed) return false;
+      const { inputKey, physicalKey } = SharedUtils.normalizeKeyEvent(e);
+      const isMatch = inputKey === parsed.key || physicalKey === parsed.key;
+      if (!isMatch) return false;
+
+      return parsed.meta === e.metaKey && parsed.ctrl === e.ctrlKey && parsed.alt === e.altKey && parsed.shift === e.shiftKey;
+    };
+    if (checkKey(hotkeys.highlight)) return "highlight";
+    if (checkKey(hotkeys.toggleWhiteboard)) return "toggleWhiteboard";
+    if (checkKey(hotkeys.toggleDrawings)) return "toggleDrawings";
+    if (checkKey(hotkeys.toggleHighlights)) return "toggleHighlights";
+    if (checkKey(hotkeys.toggleAll)) return "toggleAll";
+    return null;
+  }
+  runHotkeyAction(action, e) {
+    if (!action) return false;
+    if (action === "highlight") {
+      const s = window.getSelection();
+      if (this.highlighter && this.highlighter.isValidSelection(s)) this.highlighter.applyHighlight(s.getRangeAt(0), this.highlighter.currentColor, true);
+      return true;
+    }
+    if (action === "toggleWhiteboard") {
+      this.whiteboardActive = !this.whiteboardActive;
+      this.ui.toggleWhiteboardMode(this.whiteboardActive);
+      this.updateObserverState();
+      return true;
+    }
+    if (action === "toggleDrawings") {
+      this.toggleDrawingsVisibility(document.documentElement.classList.contains("marklet-hidden-d"));
+      return true;
+    }
+    if (action === "toggleHighlights") {
+      this.toggleHighlightsVisibility(document.documentElement.classList.contains("marklet-hidden-h"));
+      return true;
+    }
+    if (action === "toggleAll") {
+      const v = document.documentElement.classList.contains("marklet-hidden-h");
+      this.toggleHighlightsVisibility(v);
+      this.toggleDrawingsVisibility(v);
+      return true;
+    }
+    return false;
+  }
   handleKey(e) {
     if (!SharedUtils.isValidExtension()) return;
     const isWhiteboard = this.whiteboardActive;
-    const isShadow = e.composedPath().includes(this.shadowHost);
-    if (isWhiteboard && !isShadow && !(e.target.classList && e.target.classList.contains("marklet-text-input"))) {
-      e.stopImmediatePropagation();
-      e.stopPropagation();
-      e.preventDefault();
+    const isMarkletTextInput = !!(e.target?.classList && e.target.classList.contains("marklet-text-input"));
+    if (isWhiteboard) {
+      this.consumeKeyEvent(e, !isMarkletTextInput);
+      if (isMarkletTextInput) return;
       if (e.type === 'keydown') {
         if (this.ui) this.ui.triggerKey(e);
-        this.checkHotkeys(e);
+        this.runHotkeyAction(this.getMatchedHotkeyAction(e), e);
       }
       return;
     }
-    if (e.type === 'keydown') {
-      if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
-      this.checkHotkeys(e);
-    }
-  }
-  checkHotkeys(e) {
-    const hotkeys = this.hotkeys || SharedUtils.getDefaultHotkeys();
-    const checkKey = (hotkey) => {
-      if (!hotkey) return false;
-      const parts = hotkey.toLowerCase().split("+");
-      const key = parts.pop();
-      const codeMap = { Period: '.', Comma: ',', Slash: '/', Backslash: '\\', BracketLeft: '[', BracketRight: ']', Quote: "'", Semicolon: ';', Minus: '-', Equal: '=', Backquote: '`', Space: 'Space' };
-      let inputKey = (e.code || "").replace(/^Key/, "").replace(/^Digit/, "");
-      if (codeMap[inputKey]) inputKey = codeMap[inputKey];
-      if (e.code && codeMap[e.code]) inputKey = codeMap[e.code];
-      const isMatch = inputKey.toLowerCase() === key || (e.key && e.key.toLowerCase() === key);
-      return isMatch &&
-        (parts.includes("meta") || parts.includes("cmd") || parts.includes("command")) === e.metaKey &&
-        (parts.includes("ctrl") || parts.includes("control")) === e.ctrlKey &&
-        (parts.includes("alt") || parts.includes("option")) === e.altKey &&
-        (parts.includes("shift")) === e.shiftKey;
-    };
-    const handleAction = (action) => {
-      if (!this.whiteboardActive) { e.preventDefault(); e.stopPropagation(); }
-      action();
-    };
-
-    if (checkKey(hotkeys.highlight)) {
-      handleAction(() => {
-        const s = window.getSelection();
-        if (this.highlighter && this.highlighter.isValidSelection(s)) this.highlighter.applyHighlight(s.getRangeAt(0), this.highlighter.currentColor, true);
-      });
-    }
-    if (checkKey(hotkeys.toggleWhiteboard)) {
-      handleAction(() => {
-        this.whiteboardActive = !this.whiteboardActive;
-        this.ui.toggleWhiteboardMode(this.whiteboardActive);
-        this.updateObserverState();
-      });
-    }
-    if (checkKey(hotkeys.toggleDrawings)) {
-      handleAction(() => this.toggleDrawingsVisibility(document.documentElement.classList.contains("marklet-hidden-d")));
-    }
-    if (checkKey(hotkeys.toggleHighlights)) {
-      handleAction(() => this.toggleHighlightsVisibility(document.documentElement.classList.contains("marklet-hidden-h")));
-    }
-    if (checkKey(hotkeys.toggleAll)) {
-      handleAction(() => {
-        const v = document.documentElement.classList.contains("marklet-hidden-h");
-        this.toggleHighlightsVisibility(v); this.toggleDrawingsVisibility(v);
-      });
-    }
+    if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
+    const action = this.getMatchedHotkeyAction(e);
+    if (!action) return;
+    this.consumeKeyEvent(e);
+    if (e.type === "keydown") this.runHotkeyAction(action, e);
   }
   toggleHighlightsVisibility(v) { document.documentElement.classList.toggle("marklet-hidden-h", !v); }
   toggleDrawingsVisibility(v) { document.documentElement.classList.toggle("marklet-hidden-d", !v); if (this.whiteboard) this.whiteboard.toggleVisibility(v); }
   async restoreState() {
     if (!SharedUtils.isValidExtension()) return;
-    const d = await chrome.storage.local.get(["theme", "highlightsVisible", "drawingsVisible", "selectionToolbarEnabled", "highlightShadowsEnabled", "highlightRounded"]);
+    const d = this.sanitizeStoredSettings(await chrome.storage.local.get(["theme", "highlightsVisible", "drawingsVisible", "selectionToolbarEnabled", "highlightShadowsEnabled", "highlightRounded"]));
     if (d.theme && d.theme !== "system") document.documentElement.setAttribute("data-marklet-theme", d.theme);
-    this.toggleHighlightsVisibility(d.highlightsVisible !== false);
-    this.toggleDrawingsVisibility(d.drawingsVisible !== false);
-    document.documentElement.classList.toggle("marklet-shadows", d.highlightShadowsEnabled !== false);
-    document.documentElement.classList.toggle("marklet-rounded", d.highlightRounded !== false);
-    this.highlighter.selectionToolbarEnabled = d.selectionToolbarEnabled !== false;
+    this.toggleHighlightsVisibility(d.highlightsVisible);
+    this.toggleDrawingsVisibility(d.drawingsVisible);
+    document.documentElement.classList.toggle("marklet-shadows", d.highlightShadowsEnabled);
+    document.documentElement.classList.toggle("marklet-rounded", d.highlightRounded);
+    this.highlighter.selectionToolbarEnabled = d.selectionToolbarEnabled;
     this.ui.toggleDock(this.whiteboardActive);
   }
 }

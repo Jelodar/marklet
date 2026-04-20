@@ -40,6 +40,26 @@ describe('Whiteboard Event Blocking', () => {
         assert.strictEqual(propagationStopped, true, "Should call stopImmediatePropagation when whiteboard is active");
     });
 
+    it('should stop keyup propagation when whiteboard is active', async () => {
+        marklet = new Marklet();
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        marklet.whiteboardActive = true;
+
+        let propagationStopped = false;
+        const event = new window.KeyboardEvent('keyup', {
+            key: 'a',
+            bubbles: true,
+            cancelable: true
+        });
+
+        event.stopImmediatePropagation = () => { propagationStopped = true; };
+
+        document.dispatchEvent(event);
+
+        assert.strictEqual(propagationStopped, true, "Should call stopImmediatePropagation on keyup when whiteboard is active");
+    });
+
     it('should NOT stop event propagation when whiteboard is inactive', async () => {
         marklet = new Marklet();
         await new Promise(resolve => setTimeout(resolve, 50));

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <script src="../utils/theme-init.js"></script>
   <style>
     :root {
       --bg-color: #ffffff;
@@ -14,6 +15,20 @@
       --switch-bg: #ccc;
     }
 
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg-color: #1e1e1e;
+        --text-color: #e0e0e0;
+        --text-muted: #999999;
+        --border-color: #333333;
+        --hover-bg: #3a3a3a;
+        --card-bg: #252525;
+        --primary-color: #3b82f6;
+        --secondary-bg: #2d2d2d;
+        --switch-bg: #444;
+      }
+    }
+
     [data-theme="dark"] {
       --bg-color: #1e1e1e;
       --text-color: #e0e0e0;
@@ -24,6 +39,18 @@
       --primary-color: #3b82f6;
       --secondary-bg: #2d2d2d;
       --switch-bg: #444;
+    }
+
+    [data-theme="light"] {
+      --bg-color: #ffffff;
+      --text-color: #212529;
+      --text-muted: #666666;
+      --border-color: #eeeeee;
+      --hover-bg: #f5f5f5;
+      --card-bg: #ffffff;
+      --primary-color: #007bff;
+      --secondary-bg: #f9f9f9;
+      --switch-bg: #ccc;
     }
 
     body {
@@ -120,10 +147,12 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+      border-left: 4px solid var(--highlight-color, transparent);
     }
     .highlight-item:last-child {
       border-bottom: none;
     }
+
     .highlight-text {
       white-space: nowrap;
       overflow: hidden;
@@ -136,6 +165,31 @@
       display: flex;
       gap: 8px;
     }
+
+    #override-select-btn {
+      padding: 4px 8px;
+    }
+
+    .settings-panel {
+      padding: 8px;
+      background: var(--secondary-bg);
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .data-actions-small {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-clear-mini {
+      font-size: 10px;
+      padding: 1px 6px;
+    }
+
     .action-btn {
       font-size: 11px;
       padding: 2px 8px;
@@ -158,6 +212,18 @@
       color: #ff4d4d;
       border-color: #ff4d4d;
     }
+
+    .text-muted { color: var(--text-muted); }
+    .text-center { text-align: center; }
+    .p-10 { padding: 10px; }
+
+    .empty-state {
+        color: var(--text-muted);
+        text-align: center;
+        padding: 20px;
+        font-size: 13px;
+    }
+
     @keyframes flash {
       0% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7); }
       70% { box-shadow: 0 0 0 10px rgba(0, 123, 255, 0); }
@@ -167,6 +233,28 @@
       animation: flash 1s;
     }
     
+    .hint-banner {
+      background: var(--secondary-bg);
+      color: var(--text-color);
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border-color);
+      opacity: 0.8;
+    }
+
+    .disabled-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      display: none;
+      cursor: not-allowed;
+    }
+
     #open-settings {
       background: none; 
       border: none; 
@@ -186,19 +274,53 @@
       position: fixed;
       bottom: 20px;
       left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.8);
-      color: white;
+      transform: translateX(-50%) translateY(10px);
+      background: rgba(0, 0, 0, 0.85);
+      color: #fff;
       padding: 8px 16px;
-      border-radius: 20px;
+      border-radius: 12px;
       font-size: 12px;
+      font-weight: 600;
       z-index: 1000;
       opacity: 0;
-      transition: opacity 0.2s;
+      transition: opacity 0.3s, transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
       pointer-events: none;
       white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      backdrop-filter: blur(8px);
+    }
+    .toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
     }
 
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center; z-index: 10000;
+      animation: mk-fade-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .modal-panel {
+      background: var(--bg-color); border-radius: 18px; padding: 24px;
+      width: min(340px, 90vw); box-shadow: 0 24px 64px rgba(0,0,0,0.24); text-align: center;
+      animation: mk-scale-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid var(--border-color);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--text-color); }
+    .modal-message { font-size: 13px; color: var(--text-muted); line-height: 1.4; margin-bottom: 20px; }
+    .modal-actions { display: flex; gap: 10px; }
+    .modal-btn {
+        flex: 1; padding: 8px; border-radius: 8px; border: none; font-size: 14px; font-weight: 700;
+        cursor: pointer; transition: all 0.2s;
+    }
+    .modal-btn-secondary { background: var(--hover-bg); color: var(--text-color); }
+    .modal-btn-primary { background: var(--primary-color); color: #fff; }
+    .modal-btn-danger { background: #dc3545; color: #fff; }
+
+    @keyframes mk-fade-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes mk-scale-in { from { transform: scale(0.95) translateY(8px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
     .data-row {
       display: flex; 
       justify-content: space-between; 
@@ -279,17 +401,17 @@
   </div>
 
   <div class="toggle-container" id="selection-override-container">
-    <button id="override-select-btn" class="action-btn row" style="padding: 4px 8px;">Make All Text Selectable</button>
+    <button id="override-select-btn" class="action-btn row">Make All Text Selectable</button>
   </div>
 
-  <div id="default-settings-container" style="padding: 8px; background: var(--secondary-bg); border-radius: 4px; display: flex; flex-direction: column; gap: 4px;">
+  <div id="default-settings-container" class="settings-panel">
     <div class="data-row">
       <div class="data-info">
         <span>Highlights</span>
         <span id="highlights-count" class="count-badge">0</span>
       </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <button id="clear-all-highlights" class="action-btn btn-delete" style="font-size: 10px; padding: 1px 6px;">Clear All</button>
+      <div class="data-actions-small">
+        <button id="clear-all-highlights" class="action-btn btn-delete btn-clear-mini">Clear All</button>
         <input type="color" id="default-highlight-color" value="#ffff00" title="Default Highlight Color">
       </div>
     </div>
@@ -298,8 +420,8 @@
         <span>Drawings</span>
         <span id="drawings-count" class="count-badge">0</span>
       </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
-        <button id="clear-all-drawings" class="action-btn btn-delete" style="font-size: 10px; padding: 1px 6px;">Clear All</button>
+      <div class="data-actions-small">
+        <button id="clear-all-drawings" class="action-btn btn-delete btn-clear-mini">Clear All</button>
         <input type="color" id="default-draw-color" value="#ff0000" title="Default Drawing Color">
       </div>
     </div>
@@ -309,12 +431,12 @@
     <span>Current Page Highlights</span>
   </div>
   <div id="highlights-list">
-    <div style="color: var(--text-muted); text-align: center; padding: 10px;">No highlights yet</div>
+    <div class="empty-state">No highlights yet</div>
   </div>
 
   <script src="../utils/tiny-idb.js"></script>
   <script src="../utils/page-storage.js"></script>
   <script src="../utils/shared.js"></script>
-  <script src="popup.js"></script>
-</body>
+  <script src="../utils/ui-shared.js"></script>
+  <script src="popup.js"></script></body>
 </html>

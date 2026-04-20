@@ -37,7 +37,7 @@ describe('Highlighter Restoration', () => {
             docLength: 20
         }];
 
-        await tinyIDB.set(url, { highlights, url });
+        await PageStorage.set(url, { highlights, url });
 
         await highlighter.loadHighlights();
 
@@ -60,7 +60,7 @@ describe('Highlighter Restoration', () => {
             docLength: 20
         }];
 
-        await tinyIDB.set(url, { highlights, url });
+        await PageStorage.set(url, { highlights, url });
 
         await highlighter.loadHighlights();
 
@@ -82,7 +82,7 @@ describe('Highlighter Restoration', () => {
             docLength: 30
         }];
 
-        await tinyIDB.set(url, { highlights, url });
+        await PageStorage.set(url, { highlights, url });
 
         await highlighter.loadHighlights();
 

@@ -1,7 +1,7 @@
 class Highlighter {
   constructor(app) {
     this.app = app;
-    this.currentColor = "#FFFF00";
+    this.currentColor = SharedUtils.getDefaultHighlightColor();
     this.selectionToolbarEnabled = true;
     this.allowReadonly = true;
     this.isProcessing = false;
@@ -14,9 +14,9 @@ class Highlighter {
     this.clickListener = (e) => this.handleHighlightClick(e);
     this.storageListener = (c) => {
         if (SharedUtils.isValidExtension()) {
-            if (c.highlightShadowsEnabled) document.documentElement.classList.toggle("marklet-shadows", c.highlightShadowsEnabled.newValue);
-            if (c.highlightRounded) document.documentElement.classList.toggle("marklet-rounded", c.highlightRounded.newValue);
-            if (c.allowReadonlyHighlight) this.allowReadonly = c.allowReadonlyHighlight.newValue;
+            if (c.highlightShadowsEnabled) document.documentElement.classList.toggle("marklet-shadows", SharedUtils.sanitizeStoredSettings({ highlightShadowsEnabled: c.highlightShadowsEnabled.newValue }).highlightShadowsEnabled);
+            if (c.highlightRounded) document.documentElement.classList.toggle("marklet-rounded", SharedUtils.sanitizeStoredSettings({ highlightRounded: c.highlightRounded.newValue }).highlightRounded);
+            if (c.allowReadonlyHighlight) this.allowReadonly = SharedUtils.sanitizeStoredSettings({ allowReadonlyHighlight: c.allowReadonlyHighlight.newValue }).allowReadonlyHighlight;
         }
     };
     document.addEventListener("mouseup", this.mouseUpListener);
@@ -41,9 +41,9 @@ class Highlighter {
   }
   async loadDefaultColor() {
     if (SharedUtils.isValidExtension()) {
-      const d = await chrome.storage.local.get(["defaultHighlightColor", "allowReadonlyHighlight"]);
-      if (d.defaultHighlightColor) this.currentColor = d.defaultHighlightColor;
-      this.allowReadonly = d.allowReadonlyHighlight !== false;
+      const d = SharedUtils.sanitizeStoredSettings(await chrome.storage.local.get(["defaultHighlightColor", "allowReadonlyHighlight"]));
+      this.currentColor = d.defaultHighlightColor;
+      this.allowReadonly = d.allowReadonlyHighlight;
     }
   }
   isValidSelection(s) {
@@ -95,13 +95,6 @@ class Highlighter {
     });
     return { resolved, unresolved };
   }
-  renderIntervals(intervals) {
-    const displayCache = new WeakMap();
-    intervals.forEach(item => {
-      const range = DOMUtils.getRangeFromOffsets(item.start, item.end);
-      if (range) this.renderHighlight(range, item.color, item.id, displayCache);
-    });
-  }
   async applyHighlight(r, c, isHotkey = false) {
     if (!SharedUtils.isValidExtension() || this.isProcessing) return;
     if (this.isEditable(r.startContainer) || this.isEditable(r.endContainer)) {
@@ -113,11 +106,11 @@ class Highlighter {
     this.app.pauseObserver();
     try {
       const url = SharedUtils.normalizeUrl(window.location.href);
-      const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
+      const pageData = await PageStorage.get(url);
+      const page = SharedUtils.normalizePageData(pageData, url);
       const newOffsets = DOMUtils.getGlobalOffsets(r);
       const text = r.toString();
       if (!newOffsets) throw new Error("Unable to calculate offsets");
-      DOMUtils.stripHighlights();
       const snapshot = DOMUtils.createTextSnapshot();
       const { resolved: rangeRequests, unresolved: initiallyUnresolved } = this.resolveStoredHighlights(page.highlights, snapshot);
       const offsetMap = DOMUtils.getBatchGlobalOffsets(rangeRequests, snapshot);
@@ -125,10 +118,10 @@ class Highlighter {
       const unresolved = [...initiallyUnresolved];
       rangeRequests.forEach(req => {
         const off = offsetMap.get(req.id);
-        if (off) resolvedHighlights.push({ ...req.highlight, start: off.start, end: off.end });
+        if (off) resolvedHighlights.push({ ...req.highlight, start: off.start, end: off.end, id: req.id });
         else unresolved.push(req.highlight);
       });
-      const merged = this.flattenIntervals(resolvedHighlights, { start: newOffsets.start, end: newOffsets.end, color: c, text });
+      const merged = this.flattenIntervals(resolvedHighlights, { start: newOffsets.start, end: newOffsets.end, color: c, text, id: null });
       await this.renderAndSave(merged, page, url, unresolved, snapshot);
       this.app.ui.trackRecentColor(c);
       window.getSelection().removeAllRanges();
@@ -153,10 +146,15 @@ class Highlighter {
   flattenIntervals(ex, item) {
     const res = [];
     ex.forEach((x) => {
-      if (x.end <= item.start || x.start >= item.end) res.push({ start: x.start, end: x.end, color: x.color, text: x.text });
-      else {
-        if (x.start < item.start) res.push({ start: x.start, end: item.start, color: x.color, text: null });
-        if (x.end > item.end) res.push({ start: item.end, end: x.end, color: x.color, text: null });
+      if (x.end <= item.start || x.start >= item.end) {
+          res.push({ start: x.start, end: x.end, color: x.color, text: x.text, id: x.id });
+      } else {
+        if (x.start < item.start) {
+            res.push({ start: x.start, end: item.start, color: x.color, text: null, id: null });
+        }
+        if (x.end > item.end) {
+            res.push({ start: item.end, end: x.end, color: x.color, text: null, id: null });
+        }
       }
     });
     res.push(item);
@@ -171,29 +169,84 @@ class Highlighter {
       if (n.start <= c.end && n.color === c.color) {
         c.end = Math.max(c.end, n.end);
         c.text = null;
+        // If we merge, we might lose an ID, but that's expected as the range changed.
+        c.id = (c.id === n.id) ? c.id : null; 
       } else m.push(n);
     }
     return m;
   }
   async renderAndSave(intervals, page, url, unresolved = [], snapshot = DOMUtils.createTextSnapshot()) {
-    DOMUtils.stripHighlights();
     const docLength = DOMUtils.getDocumentText(snapshot).length;
+    
+    // Assign IDs to intervals if they don't have one yet
+    intervals.forEach(item => {
+      if (!item.id) item.id = crypto.randomUUID();
+    });
+
     const highlights = intervals.map(item => {
-      const range = DOMUtils.getRangeFromOffsets(item.start, item.end);
+      const range = DOMUtils.getRangeFromOffsets(item.start, item.end, snapshot);
       if (!range) return null;
-      const id = item.id || crypto.randomUUID();
-      item.id = id;
-      return { id, url, color: item.color, text: item.text || range.toString(), anchor: DOMUtils.serializeRange(range), start: item.start, docLength, timestamp: Date.now() };
+      return { id: item.id, url, color: item.color, text: item.text || range.toString(), anchor: DOMUtils.serializeRange(range), start: item.start, docLength, timestamp: Date.now() };
     }).filter(Boolean);
     if (this.app.isSavable) {
       page.highlights = [...highlights, ...unresolved];
       page.lastUpdated = Date.now();
-      await tinyIDB.set(url, page);
+      await PageStorage.set(url, page);
     } else {
       this.localPage.highlights = [...highlights, ...unresolved];
       this.localPage.lastUpdated = Date.now();
     }
-    this.renderIntervals(intervals);
+    this.renderBatch(intervals, snapshot);
+  }
+  renderBatch(intervals, snapshot = DOMUtils.createTextSnapshot()) {
+    const existing = new Map();
+    document.querySelectorAll(".marklet-highlight").forEach(m => {
+      const id = m.dataset.id;
+      if (!existing.has(id)) existing.set(id, []);
+      existing.get(id).push(m);
+    });
+
+    const toRemove = new Set(existing.keys());
+    const toRender = [];
+
+    intervals.forEach(item => {
+      if (existing.has(item.id)) {
+        toRemove.delete(item.id);
+        const marks = existing.get(item.id);
+        const textColor = this.getContrastColor(item.color);
+        marks.forEach(m => {
+          if (m.style.getPropertyValue("--marklet-highlight-color") !== item.color) {
+            m.style.setProperty("--marklet-highlight-color", item.color);
+            m.style.setProperty("--marklet-text-color", textColor);
+          }
+        });
+      } else {
+        toRender.push(item);
+      }
+    });
+
+    toRemove.forEach(id => {
+      const marks = existing.get(id);
+      marks.forEach(m => {
+        const p = m.parentNode;
+        if (p) {
+          while (m.firstChild) p.insertBefore(m.firstChild, m);
+          p.removeChild(m);
+        }
+      });
+    });
+
+    if (toRemove.size > 0) document.body.normalize();
+
+    if (toRender.length > 0) {
+      const displayCache = new WeakMap();
+      toRender.forEach(item => {
+        // We need a fresh range calculation for every render if DOM changed
+        const currentSnapshot = DOMUtils.createTextSnapshot();
+        const range = DOMUtils.getRangeFromOffsets(item.start, item.end, currentSnapshot);
+        if (range) this.renderHighlight(range, item.color, item.id, displayCache);
+      });
+    }
   }
   async loadHighlights() {
     if (!SharedUtils.isValidExtension() || this.isProcessing) return;
@@ -203,19 +256,21 @@ class Highlighter {
       const url = SharedUtils.normalizeUrl(window.location.href);
       let pageHighlights = [];
       if (this.app.isSavable) {
-        const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
+        const page = SharedUtils.normalizePageData(await PageStorage.get(url), url);
         pageHighlights = page.highlights;
       } else {
         pageHighlights = this.localPage.highlights || [];
       }
-      DOMUtils.stripHighlights();
       const snapshot = DOMUtils.createTextSnapshot();
       this.app.hasHighlights = pageHighlights.length > 0;
-      if (!this.app.hasHighlights) return;
+      if (!this.app.hasHighlights) {
+          DOMUtils.stripHighlights();
+          return;
+      }
       const { resolved: rangeRequests } = this.resolveStoredHighlights(pageHighlights, snapshot);
       const offsetMap = DOMUtils.getBatchGlobalOffsets(rangeRequests, snapshot);
       const intervals = rangeRequests.map(req => offsetMap.get(req.id) ? { start: offsetMap.get(req.id).start, end: offsetMap.get(req.id).end, color: req.highlight.color, id: req.id } : null).filter(Boolean);
-      this.renderIntervals(intervals);
+      this.renderBatch(intervals, snapshot);
     } catch (e) {
       console.error("Marklet:", e);
     } finally {
@@ -255,7 +310,8 @@ class Highlighter {
       if (start >= end) return;
       const nr = document.createRange(); nr.setStart(n, start); nr.setEnd(n, end);
       const m = document.createElement("mark"); m.className = "marklet-highlight";
-      m.style.cssText = `background-color: ${c} !important; color: ${textColor} !important; padding: 1px 0 !important; cursor: pointer !important; display: inline !important; border: none !important; transition: transform 0.2s, background-color 0.1s !important;`;
+      m.style.setProperty("--marklet-highlight-color", c);
+      m.style.setProperty("--marklet-text-color", textColor);
       m.dataset.id = id;
       try { m.appendChild(nr.extractContents()); nr.insertNode(m); } catch (e) {}
     });
@@ -289,28 +345,32 @@ class Highlighter {
     this.app.pauseObserver();
     try {
       const url = SharedUtils.normalizeUrl(window.location.href);
-      const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
-      if (page) {
-        page.highlights = page.highlights.filter(h => h.id !== id);
-        if (page.highlights.length === 0 && (!page.drawings || page.drawings.length === 0)) await tinyIDB.remove(url);
-        else await tinyIDB.set(url, page);
-        this.isProcessing = false;
-        await this.loadHighlights();
-      } else {
-        this.isProcessing = false;
-      }
+      await PageStorage.update(url, 'delete_highlight', { id });
+      
+      // Update DOM immediately instead of loadHighlights()
+      const marks = document.querySelectorAll(`.marklet-highlight[data-id="${id}"]`);
+      marks.forEach(m => {
+        const p = m.parentNode;
+        if (p) {
+          while (m.firstChild) p.insertBefore(m.firstChild, m);
+          p.removeChild(m);
+        }
+      });
+      document.body.normalize();
+
       this.app.ui.hideEditToolbar();
     } catch (e) {
       console.error("Marklet:", e);
-      this.isProcessing = false;
     } finally {
+      this.isProcessing = false;
       this.app.updateObserverState();
     }
   }
   previewColor(id, c) {
+    const textColor = this.getContrastColor(c);
     document.querySelectorAll(`.marklet-highlight[data-id="${id}"]`).forEach(m => {
-      m.style.backgroundColor = c;
-      m.style.color = this.getContrastColor(c);
+      m.style.setProperty("--marklet-highlight-color", c);
+      m.style.setProperty("--marklet-text-color", textColor);
     });
   }
   async changeColor(id, c) {
@@ -319,20 +379,20 @@ class Highlighter {
     this.app.pauseObserver();
     try {
       const url = SharedUtils.normalizeUrl(window.location.href);
-      const page = SharedUtils.normalizePageData(await tinyIDB.get(url), url);
-      const h = page.highlights.find(x => x.id === id);
-      if (h) {
-        h.color = c;
-        await tinyIDB.set(url, page);
-        this.isProcessing = false;
-        await this.loadHighlights();
+      const page = SharedUtils.normalizePageData(await PageStorage.get(url), url);
+      if (page.highlights.some(x => x.id === id)) {
+        await PageStorage.update(url, 'set_highlight_color', { id, color: c });
+        
+        // Update DOM immediately
+        this.previewColor(id, c);
+
         this.app.ui.trackRecentColor(c);
         this.app.ui.hideEditToolbar();
       }
     } catch (e) {
       console.error("Marklet:", e);
-      this.isProcessing = false;
-      this.loadHighlights();
+      // Fallback only on error
+      await this.loadHighlights();
     } finally {
       this.isProcessing = false;
       this.app.updateObserverState();

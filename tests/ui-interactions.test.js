@@ -45,39 +45,32 @@ describe('UI Interactions', () => {
         assert.strictEqual(ui.palette.classList.contains('visible'), true);
     });
 
-    it('should clear drawings when trash button is clicked and confirmed', () => {
-        const originalConfirm = global.confirm;
-        global.confirm = () => true;
+    it('should clear drawings when trash button is clicked and confirmed', async () => {
+        SharedUI.confirm = mock.fn(async () => true);
         const spy = mock.method(marklet.whiteboard, 'clear');
         
         const btnClear = ui.dock.querySelector('#btn-clear-draw-dock');
-        btnClear.click();
+        await btnClear.onclick({ stopPropagation: () => {} });
         
         assert.strictEqual(spy.mock.calls.length, 1);
-        global.confirm = originalConfirm;
     });
 
-    it('should NOT clear drawings when trash button is clicked and cancelled', () => {
-        const originalConfirm = global.confirm;
-        global.confirm = () => false;
+    it('should NOT clear drawings when trash button is clicked and cancelled', async () => {
+        SharedUI.confirm = mock.fn(async () => false);
         const spy = mock.method(marklet.whiteboard, 'clear');
         
         const btnClear = ui.dock.querySelector('#btn-clear-draw-dock');
-        btnClear.click();
+        await btnClear.onclick({ stopPropagation: () => {} });
         
         assert.strictEqual(spy.mock.calls.length, 0);
-        global.confirm = originalConfirm;
     });
 
-    it('should show notification and then hide it', async () => {
+    it('should show notification', async () => {
         ui.showNotification('Test Message');
-        
-        const note = ui.container.querySelector('div.toast');
+
+        const note = marklet.shadow.querySelector('div.toast');
         assert.ok(note);
         assert.strictEqual(note.textContent, 'Test Message');
-        
-        await new Promise(resolve => setTimeout(resolve, 50));
-        assert.strictEqual(note.style.opacity, '1');
     });
 
     it('should toggle dock visibility', () => {

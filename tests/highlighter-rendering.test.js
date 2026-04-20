@@ -56,11 +56,11 @@ describe('Highlighter Rendering & Utilities', () => {
             start: 0
         };
 
-        await tinyIDB.set(url, { highlights: [h], url });
+        await PageStorage.set(url, { highlights: [h], drawings: [], url });
 
         await highlighter.changeColor('1', '#FF0000');
 
-        const page = await tinyIDB.get(url);
+        const page = await PageStorage.get(url);
         assert.ok(page, 'Page should exist');
         assert.ok(page.highlights.length > 0, 'Highlights should exist');
         assert.strictEqual(page.highlights[0].color, '#FF0000');
@@ -75,11 +75,11 @@ describe('Highlighter Rendering & Utilities', () => {
             start: 0
         };
         
-        await tinyIDB.set(url, { highlights: [h], url });
+        await PageStorage.set(url, { highlights: [h], drawings: [], url });
         
         await highlighter.deleteHighlight('1');
         
-        const page = await tinyIDB.get(url);
+        const page = await PageStorage.get(url);
         assert.ok(!page || page.highlights.length === 0);
     });
 });

@@ -1,18 +1,60 @@
 class DOMUtils {
+  static isVisibleTextNode(node) {
+    if (!node || node.nodeType !== Node.TEXT_NODE || !node.textContent) return false;
+    let current = node.parentElement;
+    if (!current) return false;
+    const styleCache = new Map();
+    while (current && current !== document.body) {
+      const tag = current.nodeName;
+      if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT' || tag === 'TEMPLATE' || tag === 'HEAD' || tag === 'TITLE' || tag === 'META') return false;
+      if (current.hasAttribute('hidden') || current.getAttribute('aria-hidden') === 'true') return false;
+      const style = window.getComputedStyle(current);
+      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      current = current.parentElement;
+    }
+    return true;
+  }
   static createTextSnapshot() {
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const nodes = [];
     const starts = [];
     const lengths = [];
     const nodeOffsets = new Map();
-    let text = "", node;
+    const styleCache = new Map();
+    let text = "";
+
+    const getStyle = (el) => {
+      let s = styleCache.get(el);
+      if (s !== undefined) return s;
+      s = window.getComputedStyle(el);
+      styleCache.set(el, s);
+      return s;
+    };
+
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const tag = node.nodeName;
+          if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT' || tag === 'TEMPLATE' || tag === 'HEAD' || tag === 'TITLE' || tag === 'META') return NodeFilter.FILTER_REJECT;
+          if (node.hasAttribute('hidden') || node.getAttribute('aria-hidden') === 'true') return NodeFilter.FILTER_REJECT;
+          if (getStyle(node).display === 'none') return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_SKIP;
+        }
+        const parent = node.parentElement;
+        if (!parent || getStyle(parent).visibility === 'hidden' || !node.textContent) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+
+    let node;
     while ((node = walker.nextNode())) {
-      const start = text.length;
-      nodes.push(node);
-      starts.push(start);
-      lengths.push(node.textContent.length);
-      nodeOffsets.set(node, start);
-      text += node.textContent;
+      if (node.nodeType === Node.TEXT_NODE) {
+        const start = text.length;
+        nodes.push(node);
+        starts.push(start);
+        lengths.push(node.textContent.length);
+        nodeOffsets.set(node, start);
+        text += node.textContent;
+      }
     }
     return { nodes, starts, lengths, nodeOffsets, text };
   }

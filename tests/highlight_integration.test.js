@@ -29,8 +29,8 @@ describe('Highlighter Integration', () => {
         }
         container.innerHTML = 'Hello World';
         
-        tinyIDB.get = mock.fn(async () => ({ highlights: [], url: 'http://localhost' }));
-        tinyIDB.set = mock.fn(async () => {});
+        PageStorage.get = mock.fn(async () => ({ highlights: [], drawings: [], url: 'http://localhost' }));
+        PageStorage.set = mock.fn(async () => {});
         
         hl = new TestHighlighter();
     });
@@ -48,7 +48,7 @@ describe('Highlighter Integration', () => {
         await hl.applyHighlight(range1, 'yellow');
 
         
-        let calls = tinyIDB.set.mock.calls;
+        let calls = PageStorage.set.mock.calls;
         let lastCall = calls[calls.length - 1];
         let page = lastCall.arguments[1];
         let highlights = page.highlights;
@@ -57,7 +57,7 @@ describe('Highlighter Integration', () => {
         assert.strictEqual(highlights[0].text, 'Hello');
 
         
-        tinyIDB.get = mock.fn(async () => page);
+        PageStorage.get = mock.fn(async () => page);
 
         
         const mark = container.querySelector('.marklet-highlight');
@@ -68,7 +68,7 @@ describe('Highlighter Integration', () => {
         await hl.applyHighlight(rangeOverlap, 'yellow');
         
         
-        calls = tinyIDB.set.mock.calls;
+        calls = PageStorage.set.mock.calls;
         lastCall = calls[calls.length - 1];
         page = lastCall.arguments[1];
         highlights = page.highlights;
@@ -85,9 +85,9 @@ describe('Highlighter Integration', () => {
         range1.setEnd(container.firstChild, 5);
         await hl.applyHighlight(range1, 'yellow');
         
-        let calls = tinyIDB.set.mock.calls;
+        let calls = PageStorage.set.mock.calls;
         let page = calls[calls.length - 1].arguments[1];
-        tinyIDB.get = mock.fn(async () => page);
+        PageStorage.get = mock.fn(async () => page);
 
         
         
@@ -105,7 +105,7 @@ describe('Highlighter Integration', () => {
         
         await hl.applyHighlight(range2, 'yellow');
         
-        calls = tinyIDB.set.mock.calls;
+        calls = PageStorage.set.mock.calls;
         page = calls[calls.length - 1].arguments[1];
         let highlights = page.highlights;
         
@@ -122,9 +122,9 @@ describe('Highlighter Integration', () => {
         range1.setEnd(container.firstChild, 11);
         await hl.applyHighlight(range1, 'yellow');
         
-        let calls = tinyIDB.set.mock.calls;
+        let calls = PageStorage.set.mock.calls;
         let page = calls[calls.length - 1].arguments[1];
-        tinyIDB.get = mock.fn(async () => page);
+        PageStorage.get = mock.fn(async () => page);
 
         
         
@@ -135,7 +135,7 @@ describe('Highlighter Integration', () => {
         
         await hl.applyHighlight(range2, 'green');
         
-        calls = tinyIDB.set.mock.calls;
+        calls = PageStorage.set.mock.calls;
         page = calls[calls.length - 1].arguments[1];
         let highlights = page.highlights;
         

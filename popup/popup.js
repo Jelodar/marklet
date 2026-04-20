@@ -23,22 +23,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const selectionOverrideContainer = document.getElementById('selection-override-container');
   const highlightsCountBadge = document.getElementById('highlights-count');
   const drawingsCountBadge = document.getElementById('drawings-count');
+  let selectionOverrideActive = false;
 
   const applyTheme = (theme) => {
-    if (theme === 'system') {
-      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-    } else {
-      document.documentElement.setAttribute('data-theme', theme || 'light');
-    }
+    SharedUtils.applyTheme(theme);
   };
+
   const renderEmptyState = (container, text) => {
-    const empty = document.createElement('div');
-    empty.style.color = 'var(--text-muted)';
-    empty.style.textAlign = 'center';
-    empty.style.padding = '10px';
-    empty.textContent = text;
-    container.replaceChildren(empty);
+    container.replaceChildren(SharedUI.empty(text));
   };
 
   openSettingsBtn.onclick = () => chrome.runtime.openOptionsPage();
@@ -62,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   };
 
-  const data = await chrome.storage.local.get([
+  const data = SharedUtils.sanitizeStoredSettings(await chrome.storage.local.get([
     'extensionEnabled',
     'enableByDefault',
     'urlHashMode',
@@ -75,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     'defaultHighlightColor',
     'defaultDrawColor',
     'theme'
-  ]);
+  ]));
 
   SharedUtils.setUrlNormalizationSettings(data);
   applyTheme(data.theme || 'system');
@@ -89,14 +81,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isSavable = SharedUtils.isSavable(tab.url);
 
     if (isRestricted) {
-      const hint = document.createElement('div');
-      hint.style.cssText = "background: var(--secondary-bg); color: var(--text-color); padding: 8px; border-radius: 4px; font-size: 11px; margin-bottom: 12px; border: 1px solid var(--border-color); opacity: 0.8;";
-      hint.textContent = "This page is restricted by the browser. Annotations are not possible here.";
+      const hint = SharedUI.div('hint-banner', {
+        text: "This page is restricted by the browser. Annotations are not possible here."
+      });
       document.body.insertBefore(hint, document.querySelector('.header').nextSibling);
     } else if (!isSavable) {
-      const hint = document.createElement('div');
-      hint.style.cssText = "background: var(--secondary-bg); color: var(--text-color); padding: 8px; border-radius: 4px; font-size: 11px; margin-bottom: 12px; border: 1px solid var(--border-color); opacity: 0.8;";
-      hint.textContent = "This page type does not support saving. Annotations will be lost on reload.";
+      const hint = SharedUI.div('hint-banner', {
+        text: "This page type does not support saving. Annotations will be lost on reload."
+      });
       document.body.insertBefore(hint, document.querySelector('.header').nextSibling);
     }
   }
@@ -149,14 +141,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     inputs.forEach(input => {
       if (input.type === 'checkbox') {
         const wrapper = document.createElement('div');
-        wrapper.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;z-index:10;display:none;";
+        wrapper.className = 'disabled-overlay';
         container.style.position = 'relative';
         container.appendChild(wrapper);
         container._disabledWrapper = wrapper;
       } else {
         const wrapper = document.createElement('div');
         wrapper.className = 'disabled-overlay';
-        wrapper.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;z-index:10;display:none;cursor:not-allowed;";
         const parent = input.parentElement;
         if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
         parent.appendChild(wrapper);
@@ -225,7 +216,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const renderHighlights = async () => {
     if (!tab || !currentUrl) return;
-    const pageData = SharedUtils.normalizePageData(await tinyIDB.get(currentUrl), currentUrl);
+    const pageData = SharedUtils.normalizePageData(await PageStorage.get(currentUrl), currentUrl);
     const pageHighlights = pageData.highlights;
     const pageDrawings = pageData.drawings;
     
@@ -235,49 +226,47 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (pageHighlights.length > 0) {
       const fragment = document.createDocumentFragment();
       pageHighlights.forEach((highlight) => {
-        const item = document.createElement('div');
-        item.className = 'highlight-item';
-        item.style.borderLeft = `4px solid ${highlight.color || 'transparent'}`;
+        SharedUI.div('highlight-item', {
+          parent: fragment,
+          style: { '--highlight-color': highlight.color || 'transparent' }
+        }, [
 
-        const text = document.createElement('div');
-        const textValue = highlight.text || 'No text content';
-        text.className = 'highlight-text';
-        text.title = textValue;
-        text.textContent = textValue;
-
-        const actions = document.createElement('div');
-        actions.className = 'highlight-actions';
-
-        const gotoButton = document.createElement('button');
-        gotoButton.className = 'action-btn btn-goto';
-        gotoButton.textContent = 'Go To';
-        gotoButton.onclick = () => safeSendMessage(tab.id, { type: 'GOTO_HIGHLIGHT', id: highlight.id });
-
-        const copyButton = document.createElement('button');
-        copyButton.className = 'action-btn btn-copy';
-        copyButton.textContent = 'Copy';
-        copyButton.onclick = () => {
-          navigator.clipboard.writeText(highlight.text || '');
-          const originalText = copyButton.innerText;
-          copyButton.innerText = 'Copied';
-          setTimeout(() => copyButton.innerText = originalText, 1500);
-        };
-
-        const deleteButton = document.createElement('button');
-        deleteButton.className = 'action-btn btn-delete';
-        deleteButton.textContent = 'Delete';
-        deleteButton.onclick = async () => {
-          const normalizedPage = SharedUtils.normalizePageData(await tinyIDB.get(currentUrl), currentUrl);
-          normalizedPage.highlights = normalizedPage.highlights.filter(item => item.id !== highlight.id);
-          if (normalizedPage.highlights.length === 0 && normalizedPage.drawings.length === 0) await tinyIDB.remove(currentUrl);
-          else await tinyIDB.set(currentUrl, normalizedPage);
-          renderHighlights();
-          safeSendMessage(tab.id, { type: 'LOAD_HIGHLIGHTS' });
-        };
-
-        actions.append(gotoButton, copyButton, deleteButton);
-        item.append(text, actions);
-        fragment.appendChild(item);
+          SharedUI.div('highlight-text', {
+            title: highlight.text || 'No text content',
+            text: highlight.text || 'No text content'
+          }),
+          SharedUI.div('highlight-actions', [
+            SharedUI.button('action-btn btn-goto', {
+              text: 'Go To',
+              on: { click: () => safeSendMessage(tab.id, { type: 'GOTO_HIGHLIGHT', id: highlight.id }) }
+            }),
+            SharedUI.button('action-btn btn-copy', {
+              text: 'Copy',
+              on: { click: async (e) => {
+                const btn = e.target;
+                const originalText = btn.innerText;
+                try {
+                  await navigator.clipboard.writeText(highlight.text || '');
+                  btn.innerText = 'Copied';
+                  setTimeout(() => btn.innerText = originalText, 1500);
+                } catch (error) {
+                  btn.innerText = originalText;
+                  SharedUI.toast('Could not copy highlight text.');
+                }
+              }}
+            }),
+            SharedUI.button('action-btn btn-delete', {
+              text: 'Delete',
+              on: { click: async () => {
+                if (await SharedUI.confirm('Delete Highlight', 'Delete this highlight?', { isDanger: true })) {
+                  await PageStorage.update(currentUrl, 'delete_highlight', { id: highlight.id });
+                  renderHighlights();
+                  safeSendMessage(tab.id, { type: 'LOAD_HIGHLIGHTS' });
+                }
+              }}
+            })
+          ])
+        ]);
       });
       highlightsList.replaceChildren(fragment);
     } else {
@@ -288,7 +277,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function syncTabData(tab) {
     return new Promise((fullfull) => {
       safeSendMessage(tab.id, { type: 'GET_STATE' }, (response, failed) => {
-        if (failed || !response) return fullfull(false);
+        if (failed || !response) {
+          updateAllowSelectionLabel(false);
+          return fullfull(false);
+        }
         whiteboardToggle.checked = !!(response.whiteboardActive);
         updateAllowSelectionLabel(!!(response.selectionOverrideActive));
         fullfull(true);
@@ -297,10 +289,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function updateAllowSelectionLabel(isEnabled) {
+    selectionOverrideActive = !!isEnabled;
+    overrideSelectBtn.dataset.active = selectionOverrideActive ? 'true' : 'false';
     overrideSelectBtn.textContent = (isEnabled ? 'Revert Text Selection Settings' : 'Make All Text Selectable');
   }
 
-  updateAllowSelectionLabel(false);
+  if (!tab || !isGlobalEnabled || !isSiteEnabled) updateAllowSelectionLabel(false);
   renderHighlights();
 
   extensionEnableToggle.addEventListener('change', async (e) => {
@@ -377,30 +371,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   clearAllHighlightsBtn.addEventListener('click', async () => {
-    if (confirm('Clear all highlights on this page?')) {
-      const pageData = SharedUtils.normalizePageData(await tinyIDB.get(currentUrl), currentUrl);
-      pageData.highlights = [];
-      if (pageData.drawings.length === 0) await tinyIDB.remove(currentUrl);
-      else await tinyIDB.set(currentUrl, pageData);
+    if (await SharedUI.confirm('Clear Highlights', 'Clear all highlights on this page?', { isDanger: true })) {
+      await PageStorage.update(currentUrl, 'clear_highlights');
       renderHighlights();
       safeSendMessage(tab.id, { type: 'LOAD_HIGHLIGHTS' });
     }
   });
 
   clearAllDrawingsBtn.addEventListener('click', async () => {
-    if (confirm('Clear all drawings on this page?')) {
-      const pageData = SharedUtils.normalizePageData(await tinyIDB.get(currentUrl), currentUrl);
-      pageData.drawings = [];
-      if (pageData.highlights.length === 0) await tinyIDB.remove(currentUrl);
-      else await tinyIDB.set(currentUrl, pageData);
+    if (await SharedUI.confirm('Clear Drawings', 'Clear all drawings on this page?', { isDanger: true })) {
+      await PageStorage.update(currentUrl, 'clear_drawings');
       renderHighlights();
       safeSendMessage(tab.id, { type: 'CLEAR_DRAWINGS' });
     }
   });
 
   overrideSelectBtn.addEventListener('click', () => {
-    safeSendMessage(tab.id, { type: 'TOGGLE_USER_SELECT' });
-    syncTabData(tab)
+    const nextActive = !selectionOverrideActive;
+    safeSendMessage(tab.id, { type: 'TOGGLE_USER_SELECT', active: nextActive }, (response, failed) => {
+      if (failed) return;
+      updateAllowSelectionLabel(response?.selectionOverrideActive ?? nextActive);
+    });
   });
 
   chrome.storage.onChanged.addListener((changes) => {

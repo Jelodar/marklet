@@ -27,12 +27,12 @@ const SHADOW_STYLES = `
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     --mk-shadow: 0 8px 24px rgba(0,0,0,0.15);
-    --mk-backdrop: blur(4px);
+    --mk-backdrop: blur(10px);
     --mk-radius: 14px;
-    --mk-border-light: rgba(0,0,0,0.05);
+    --mk-border-light: rgba(0,0,0,0.08);
     --mk-border-dark: rgba(255,255,255,0.1);
-    --mk-bg-light: rgba(255, 255, 255, 0.75);
-    --mk-bg-dark: rgba(28, 28, 30, 0.75);
+    --mk-bg-light: rgba(255, 255, 255, 0.85);
+    --mk-bg-dark: rgba(28, 28, 30, 0.85);
     --mk-hover-light: rgba(0,0,0,0.05);
     --mk-hover-dark: rgba(255,255,255,0.1);
     --mk-z-base: 2147483600;
@@ -55,8 +55,10 @@ const SHADOW_STYLES = `
     --mk-bg-button-dark-hover: #48484a;
     --mk-bg-button-light: #f0f0f0;
     --mk-bg-button-light-hover: #e0e0e0;
+    --mk-toast-bg: rgba(28, 28, 30, 0.95);
+    --mk-modal-overlay: rgba(0, 0, 0, 0.45);
   }
-  * { font-family: var(--mk-font); }
+  * { font-family: var(--mk-font); box-sizing: border-box; }
   .marklet-ui { position: fixed; z-index: var(--mk-z-base); top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; }
   .marklet-absolute-ui { position: absolute; z-index: var(--mk-z-base); top: 0; left: 0; width: 100%; height: 0; overflow: visible; pointer-events: none; }
   .dock { position: fixed; bottom: 24px; right: 24px; left: auto; background: var(--mk-bg-light); backdrop-filter: var(--mk-backdrop); border-radius: 16px; box-shadow: var(--mk-shadow); display: none; flex-direction: column; gap: 6px; padding: 10px; pointer-events: auto; border: 1px solid rgba(255,255,255,0.4); width: 48px; align-items: center; z-index: var(--mk-z-toolbar); transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1), left 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -72,12 +74,12 @@ const SHADOW_STYLES = `
   .dock-color-btn:hover { transform: scale(1.05); }
   .thickness-wrap { padding: 10px 0; border-top: 1px solid rgba(0,0,0,0.05); width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .thickness-slider { width: 24px; height: 80px; writing-mode: vertical-lr; direction: rtl; cursor: pointer; accent-color: var(--mk-accent); }
-  .blend-wrap { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); border-radius: 10px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: background 0.2s; }
+  .blend-wrap { position: relative; width: 180%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); border-radius: 10px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); transition: background 0.2s; }
   .blend-wrap:hover { background: rgba(0,0,0,0.85); }
-  .blend-text { font-size: 8px; font-weight: 800; color: #ffffff; text-transform: uppercase; text-align: center; line-height: 1; word-break: keep-all; pointer-events: none; width: 100%; padding: 8px 0; }
+  .blend-text { font-size: 8px; font-weight: 800; color: #ffffff; text-transform: uppercase; text-align: center; line-height: 1; word-break: auto-phrase; pointer-events: none; padding: 7px 0 5px; }
   .dock-select { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 2; }
   .dock-select option { background: #2c2c2e; color: white; }
-  .dock-sep { width: 24px; height: 1px; background: rgba(0,0,0,0.05); margin: 4px 0; }
+  .dock-sep { width: 24px; height: 1px; background: #0001; border-bottom: 1px solid #fff1 margin: 2px 0; }
   .palette { position: fixed; pointer-events: auto; opacity: 0; visibility: hidden; background: var(--mk-bg-light); backdrop-filter: var(--mk-backdrop); border-radius: 16px; box-shadow: var(--mk-shadow); width: 240px; border: 1px solid var(--mk-border-light); z-index: var(--mk-z-palette); transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s; transform: translateY(15px); padding: 16px; }
   .palette.visible { opacity: 1; visibility: visible; transform: translateY(0); }
   .palette-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
@@ -104,6 +106,10 @@ const SHADOW_STYLES = `
   @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .variety-swatch { width: 28px; height: 28px; border-radius: 6px; cursor: pointer; border: 1px solid rgba(0,0,0,0.05); transition: transform 0.1s; }
   .variety-swatch:hover { transform: scale(1.1); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+  .variety-sep { grid-column: span 5; height: 1px; background: rgba(0,0,0,0.05); margin: 4px 0; }
+  .variety-del-btn { grid-column: span 5; background: transparent; color: var(--mk-danger); border: none; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.2s; }
+  .variety-del-btn:hover { background: rgba(255, 77, 77, 0.1); }
+  .variety-del-btn svg { width: 14px; height: 14px; }
   .selection-toolbar, .edit-toolbar { position: absolute; background: var(--mk-bg-light); backdrop-filter: var(--mk-backdrop); border-radius: var(--mk-radius); padding: 6px; display: flex; gap: 6px; pointer-events: auto; box-shadow: var(--mk-shadow); border: 1px solid var(--mk-border-light); z-index: var(--mk-z-toolbar); align-items: center; transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
   .tool-btn { width: 36px; height: 36px; border-radius: 10px; border: none; background: transparent; color: var(--mk-text-dark); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
   .tool-btn:hover { background: var(--mk-hover-light); }
@@ -130,7 +136,7 @@ const SHADOW_STYLES = `
   :host-context([data-marklet-theme="dark"]) .custom-row { background: rgba(255,255,255,0.05); }
   :host-context([data-marklet-theme="dark"]) .custom-row label { color: var(--mk-text-muted-dark); }
   :host-context([data-marklet-theme="light"]) .dock, :host-context([data-marklet-theme="light"]) .selection-toolbar, :host-context([data-marklet-theme="light"]) .edit-toolbar, :host-context([data-marklet-theme="light"]) .palette { background: var(--mk-bg-light); border-color: var(--mk-border-light); color: var(--mk-text-dark); }
-  :host-context([data-marklet-theme="light"]) .palette-title, :host-context([data-marklet-theme="light"]) .dock-btn, :host-context([data-marklet-theme="light"]) .tool-btn { color: var(--mk-text-dark); }
+  :host-context([data-marklet-theme="light"]) .palette-title, :host-context([data-marklet-theme="light"]) .dock-btn:not(.active), :host-context([data-marklet-theme="light"]) .tool-btn { color: var(--mk-text-dark); }
   :host-context([data-marklet-theme="light"]) .dock-btn:hover, :host-context([data-marklet-theme="light"]) .tool-btn:hover { background: var(--mk-hover-light); }
   :host-context([data-marklet-theme="light"]) .color-preview-btn { background: transparent; border-color: rgba(0,0,0,0.1); }
   :host-context([data-marklet-theme="light"]) .dock-color-btn { background: var(--mk-white); border-color: rgba(0,0,0,0.1); }
@@ -140,7 +146,53 @@ const SHADOW_STYLES = `
   :host-context([data-marklet-theme="light"]) .custom-row { background: rgba(0,0,0,0.03); }
   :host-context([data-marklet-theme="light"]) .custom-row label { color: var(--mk-text-muted); }
 
-   .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(28,28,30,0.85);color:white;padding:10px 20px;border-radius:8px;font-size:14px;z-index:var(--mk-z-overlay);pointer-events:none;opacity:0;transition: all 0.2s;box-shadow:var(--mk-shadow);backdrop-filter:var(--mk-backdrop);border:1px solid rgba(255,255,255,0.1);z-index:6}
+   .toast {
+     position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+     background: var(--mk-toast-bg); color: #fff; padding: 12px 24px; border-radius: 12px;
+     font-size: 14px; font-weight: 600; z-index: var(--mk-z-overlay);
+     opacity: 0; pointer-events: none; transition: opacity 0.3s, transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+     box-shadow: var(--mk-shadow); backdrop-filter: var(--mk-backdrop); border: 1px solid rgba(255,255,255,0.1);
+     transform: translateX(-50%) translateY(20px);
+   }
+   .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+   .modal-overlay {
+     position: fixed; inset: 0; background: var(--mk-modal-overlay); backdrop-filter: var(--mk-backdrop);
+     display: flex; align-items: center; justify-content: center; z-index: var(--mk-z-overlay);
+     pointer-events: auto; animation: mk-fade-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+     transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+   }
+   .modal-panel {
+     background: var(--mk-bg-light); border-radius: 18px; padding: 24px;
+     width: min(340px, 90vw); box-shadow: 0 24px 64px rgba(0,0,0,0.24); text-align: center;
+     animation: mk-scale-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+     border: 1px solid rgba(255,255,255,0.4);
+     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+   }
+
+   .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 10px; color: var(--mk-text-dark); letter-spacing: -0.01em; }
+   .modal-message { font-size: 14.5px; color: var(--mk-text-muted); line-height: 1.5; margin-bottom: 28px; }
+   .modal-actions { display: flex; gap: 12px; }
+   .modal-btn {
+     flex: 1; padding: 12px; border-radius: 12px; border: none; font-size: 15px; font-weight: 700;
+     cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+   }
+   .modal-btn-secondary { background: var(--mk-bg-button-light); color: var(--mk-text-light); }
+   .modal-btn-secondary:hover { background: var(--mk-bg-button-light-hover); transform: translateY(-1px); }
+   .modal-btn-primary { background: var(--mk-accent); color: var(--mk-white); }
+   .modal-btn-primary:hover { background: var(--mk-accent-hover); transform: translateY(-1px); box-shadow: 0 4px 12px var(--mk-accent-alpha); }
+   .modal-btn-danger { background: var(--mk-danger); color: var(--mk-white); }
+   .modal-btn-danger:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255, 77, 77, 0.3); }
+
+   @keyframes mk-fade-in { from { opacity: 0; } to { opacity: 1; } }
+   @keyframes mk-scale-in { from { transform: scale(0.95) translateY(8px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+   @media (prefers-color-scheme: dark) {
+     .modal-panel { background: var(--mk-bg-dark); border-color: var(--mk-border-dark); }
+     .modal-title { color: var(--mk-white); }
+     .modal-message { color: var(--mk-text-muted-dark); }
+     .modal-btn-secondary { background: var(--mk-bg-button-dark); color: var(--mk-text-inverted); }
+     .modal-btn-secondary:hover { background: var(--mk-bg-button-dark-hover); }
+   }
 
   #marklet-canvas-main {
     position: fixed;

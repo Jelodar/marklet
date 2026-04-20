@@ -55,6 +55,70 @@ describe('UI and Selection Handling', () => {
     assert.strictEqual(ui.recentColors[0], color);
     assert.strictEqual(ui.recentColors.length, 4);
   });
+
+  it('should sanitize stored palette colors before rendering palette and selection swatches', async () => {
+    chrome.storage.local.get = mock.fn(async (keys) => {
+      if (Array.isArray(keys) && keys.includes('baseColors')) {
+        return {
+          baseColors: ['#123456', '" onmouseover="window.__xss = true'],
+          originColors: ['#654321', 'bad-value']
+        };
+      }
+      if (Array.isArray(keys) && keys.includes('customPresets')) {
+        return { customPresets: ['#abcdef', '\"><img id="palette-xss">'] };
+      }
+      if (Array.isArray(keys) && keys.includes('recentColors')) {
+        return { recentColors: ['#fedcba', 'url(javascript:alert(1))'] };
+      }
+      return {};
+    });
+
+    const host = document.createElement('div');
+    const root = host.attachShadow({ mode: 'open' });
+    const unsafeUI = new UI(root, marklet);
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    unsafeUI.togglePalette(true);
+    document.body.textContent = 'visible text';
+    const range = document.createRange();
+    range.setStart(document.body.firstChild, 0);
+    range.setEnd(document.body.firstChild, 7);
+    unsafeUI.showSelectionToolbar(10, 10, range);
+    await new Promise(resolve => setTimeout(resolve, 60));
+
+    assert.strictEqual(unsafeUI.baseColors.includes('#123456'), true);
+    assert.strictEqual(unsafeUI.baseColors.some((color) => color.includes('"')), false);
+    assert.deepStrictEqual(unsafeUI.customPresets, ['#abcdef']);
+    assert.deepStrictEqual(unsafeUI.recentColors, ['#fedcba']);
+    assert.strictEqual(unsafeUI.palette.querySelector('#palette-xss'), null);
+    assert.strictEqual(unsafeUI.selToolbar.querySelector('img'), null);
+
+    unsafeUI.destroy();
+  });
+
+  it('should show a content-toolbar error when copying a highlight link fails', async () => {
+    global.navigator.clipboard = {
+      writeText: mock.fn(async () => {
+        throw new Error('clipboard denied');
+      })
+    };
+    marklet.highlighter.currentColor = '#ffff00';
+
+    const highlight = document.createElement('mark');
+    highlight.className = 'marklet-highlight';
+    highlight.dataset.id = 'h-1';
+    highlight.textContent = 'Example highlight';
+    document.body.appendChild(highlight);
+
+    ui.showEditToolbar(10, 10, 'h-1');
+    await new Promise(resolve => setTimeout(resolve, 60));
+
+    ui.editToolbar.querySelector('[title="Copy Highlight URL"]').click();
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    assert.strictEqual(document.querySelector('img'), null);
+    assert.strictEqual(document.body.querySelector('div.toast').textContent, 'Could not copy highlight link.');
+  });
 });
 
 describe('SharedUtils.isValidExtension', () => {

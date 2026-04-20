@@ -60,22 +60,23 @@ describe('Bug Reproduction: Overlapping Highlights', () => {
         const markText = marks[0].firstChild;
         const afterMarkText = marks[0].nextSibling;
         
-        setSelection(markText, 3, afterMarkText, 9);
-        await highlighter.applyHighlight(window.getSelection().getRangeAt(0), "orange");
+        const range2 = setSelection(markText, 3, afterMarkText, 9);
+        await highlighter.applyHighlight(range2, "orange");
         
         const step3Start = 25;
         const step3End = step3Start + "ed all side".length;
         
         const range3 = DOMUtils.getRangeFromOffsets(step3Start, step3End);
         setSelection(range3.startContainer, range3.startOffset, range3.endContainer, range3.endOffset);
-        await highlighter.applyHighlight(range3, "red");
+        await highlighter.applyHighlight(range3, "red");       
+        const marksFinal = document.querySelectorAll('.marklet-highlight');
+
+        const hasTha = Array.from(marksFinal).some(m => m.textContent === "tha" && m.style.backgroundColor === "yellow");
+        assert.ok(hasTha, 'Should have "tha" highlighted in yellow');
         
-        const html = document.body.innerHTML;
+        const hasThat = Array.from(marksFinal).some(m => m.textContent === "that");
+        assert.ok(!hasThat, 'Should NOT have "that" fully highlighted (split)');
         
-        assert.ok(html.includes('>tha</mark>'), 'Should have "tha" highlighted');
-        assert.ok(!html.includes('>that</mark>'), 'Should NOT have "that" fully highlighted (split)');
-        
-        const marksFinal = document.querySelectorAll('mark');
         let highlightedText = "";
         marksFinal.forEach(m => highlightedText += m.textContent);
         

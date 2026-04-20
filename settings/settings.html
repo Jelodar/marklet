@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Marklet Settings</title>
+    <script src="../utils/theme-init.js"></script>
     <link rel="stylesheet" href="settings.css">
 </head>
 <body>
@@ -19,7 +20,13 @@
 
         <main class="settings-content">
             <section class="settings-section">
-                <h2>General</h2>
+                <h2 class="flex justify-between items-center">
+                    <span class="flex items-center gap-8">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                        General
+                    </span>
+                    <button id="reset-general-btn" class="btn soft-danger mini-btn">Reset</button>
+                </h2>
                 <div class="setting-item">
                     <div class="setting-info">
                         <span>Enable Extension</span>
@@ -64,36 +71,43 @@
             </section>
 
             <section class="settings-section">
-                <h2>Page Identity</h2>
+                <h2 class="flex justify-between items-center">
+                    <span class="flex items-center gap-8">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><line x1="6" y1="8" x2="6" y2="8"></line><line x1="10" y1="8" x2="10" y2="8"></line><line x1="14" y1="8" x2="14" y2="8"></line><line x1="18" y1="8" x2="18" y2="8"></line><line x1="6" y1="12" x2="6" y2="12"></line><line x1="10" y1="12" x2="10" y2="12"></line><line x1="14" y1="12" x2="14" y2="12"></line><line x1="18" y1="12" x2="18" y2="12"></line><line x1="7" y1="16" x2="17" y2="16"></line></svg>
+                        Hotkeys
+                    </span>
+                    <button id="reset-hotkeys-btn" class="btn soft-danger mini-btn">Reset</button>
+                </h2>
                 <div class="setting-item">
-                    <div class="setting-info">
-                        <span>URL Fragments</span>
-                        <div class="setting-hint">Ignore `#...` by default. Include it for apps that route inside the fragment.</div>
-                    </div>
-                    <select id="url-hash-mode">
-                        <option value="ignore">Ignore by Default</option>
-                        <option value="include">Include by Default</option>
-                    </select>
+                    <span>Highlight Selection</span>
+                    <input type="text" class="hotkey-input" id="hotkey-highlight" placeholder="Press key...">
                 </div>
-                <div class="setting-item" style="display: block;">
-                    <div class="setting-info" style="margin-bottom: 12px;">
-                        <span>Site Overrides</span>
-                        <div class="setting-hint">Use a hostname or full URL. Overrides win over the global fragment rule.</div>
-                    </div>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-                        <input type="text" id="url-hash-site-input" placeholder="example.com" style="flex: 1 1 220px; min-width: 0;">
-                        <select id="url-hash-site-mode" style="flex: 0 0 180px;">
-                            <option value="include">Include hash</option>
-                            <option value="ignore">Ignore hash</option>
-                        </select>
-                        <button id="url-hash-site-add" class="btn secondary" type="button">Save Rule</button>
-                    </div>
-                    <div id="url-hash-site-list"></div>
+                <div class="setting-item">
+                    <span>Toggle Whiteboard</span>
+                    <input type="text" class="hotkey-input" id="hotkey-whiteboard" placeholder="Press key...">
+                </div>
+                <div class="setting-item">
+                    <span>Toggle Drawings</span>
+                    <input type="text" class="hotkey-input" id="hotkey-drawings" placeholder="Press key...">
+                </div>
+                <div class="setting-item">
+                    <span>Toggle Highlights</span>
+                    <input type="text" class="hotkey-input" id="hotkey-highlights" placeholder="Press key...">
+                </div>
+                <div class="setting-item">
+                    <span>Toggle All UI</span>
+                    <input type="text" class="hotkey-input" id="hotkey-all" placeholder="Press key...">
                 </div>
             </section>
 
             <section class="settings-section">
-                <h2>Highlights</h2>
+                <h2 class="flex justify-between items-center">
+                    <span class="flex items-center gap-8">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                        Highlights
+                    </span>
+                    <button id="reset-highlights-btn" class="btn soft-danger mini-btn">Reset</button>
+                </h2>
                 <div class="setting-item">
                     <div class="setting-info">
                         <span>Standard Highlight Color</span>
@@ -134,7 +148,13 @@
             </section>
 
             <section class="settings-section">
-                <h2>Drawings</h2>
+                <h2 class="flex justify-between items-center">
+                    <span class="flex items-center gap-8">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l5 5"></path><path d="M9.5 14.5L16 18"></path><path d="M14.5 9.5L18 16"></path></svg>
+                        Drawings
+                    </span>
+                    <button id="reset-drawings-btn" class="btn soft-danger mini-btn">Reset</button>
+                </h2>
                 <div class="setting-item">
                     <div class="setting-info">
                         <span>Standard Pen Color</span>
@@ -147,9 +167,9 @@
                         <span>Drawing Opacity</span>
                         <div class="setting-hint">Adjust the transparency of your whiteboard annotations.</div>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="opacity-controls">
                         <input type="range" id="drawing-opacity" min="1" max="100" value="75">
-                        <span id="draw-opacity-val" style="font-size: 12px; min-width: 24px;">75</span>
+                        <span id="draw-opacity-val" class="opacity-value">75</span>
                     </div>
                 </div>
                 <div class="setting-item">
@@ -179,65 +199,156 @@
             </section>
 
             <section class="settings-section">
-                <h2>Disabled Sites</h2>
-                <div class="setting-item" style="display: block;">
-                    <div id="disabled-sites-list" class="sites-list"></div>
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                    Site Rules
+                </h2>
+                <div class="setting-item">
+                    <div class="setting-info">
+                        <span>URL Hash Behavior</span>
+                        <div class="setting-hint">
+                            Set whether the part after hash must be included in the page url.<br>
+                            Some websites use hashes for navigation (e.g., example.com/article/<b>#page1</b>).
+                        </div>
+                    </div>
+                    <select id="url-hash-mode">
+                        <option value="ignore">Ignore URL hash by default</option>
+                        <option value="include">Include URL hash by default</option>
+                    </select>
+                </div>
+                
+                <div class="setting-item block">
+                    <div class="setting-info mb-12">
+                        <div class="flex justify-between items-center">
+                            <span>Custom Site Overrides</span>
+                            <button id="url-hash-reset" class="btn soft-danger mini-btn">Reset to Defaults</button>
+                        </div>
+                        <div class="setting-hint">Specify hostnames that should always include or ignore their URL fragments, regardless of the global setting.</div>
+                    </div>
+                    <div class="flex gap-8 flex-wrap mb-12">
+                        <input type="text" id="url-hash-site-input" placeholder="example.com" class="flex-1 min-w-0">
+                        <select id="url-hash-site-mode" style="flex: 0 0 160px;">
+                            <option value="include">Include hash</option>
+                            <option value="ignore">Ignore hash</option>
+                        </select>
+                        <button id="url-hash-site-add" class="btn secondary" type="button">Add Rule</button>
+                    </div>
+                    <div id="url-hash-site-list" class="settings-list"></div>
+                    <div id="url-hash-site-pagination" class="pagination pagination-compact"></div>
+                </div>
+
+                <div class="setting-item block border-top-section">
+                    <div class="setting-info mb-12">
+                        <div class="flex justify-between items-center">
+                            <span id="site-list-title">Disabled Hostnames</span>
+                            <button id="site-list-reset" class="btn soft-danger mini-btn">Reset to Defaults</button>
+                        </div>
+                        <div class="setting-hint">Add hostnames where Marklet should be completely disabled.</div>
+                    </div>
+                    <div class="flex gap-8 flex-wrap mb-12">
+                        <input type="text" id="disabled-site-input" placeholder="example.com" class="flex-1 min-w-0">
+                        <button id="disabled-site-add" class="btn secondary" type="button">Add Site</button>
+                    </div>
+                    <div id="disabled-sites-list" class="sites-list settings-list"></div>
+                    <div id="disabled-sites-pagination" class="pagination pagination-compact"></div>
                 </div>
             </section>
 
             <section class="settings-section">
-                <h2>Manage Annotations</h2>
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                    Manage Annotations
+                </h2>
                 <div class="search-bar">
                     <input type="text" id="page-search" placeholder="Search pages, highlights or drawings...">
                 </div>
-                <div id="pages-list" class="pages-list"></div>
-                <div id="pagination" class="pagination"></div>
+                <div id="annotation-pagination-top" class="pagination pagination-shell"></div>
+                <div id="pages-list" class="pages-list settings-list"></div>
+                <div id="annotation-pagination-bottom" class="pagination pagination-shell"></div>
             </section>
 
             <section class="settings-section">
-                <h2>Data</h2>
-                <div class="data-actions">
-                    <button id="export-btn" class="btn primary">Export Data</button>
-                    <button id="import-btn" class="btn secondary">Import Data</button>
-                    <input type="file" id="import-file" accept=".json" hidden>
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Data
+                </h2>
+                <div class="data-grid">
+                    <div class="data-card">
+                        <h3>Export</h3>
+                        <div class="p-v-5">
+                            <label class="checkbox-row">
+                                <input type="checkbox" id="export-annotations-toggle" checked>
+                                <span>Include annotations</span>
+                            </label>
+                            <label class="checkbox-row">
+                                <input type="checkbox" id="export-settings-toggle" checked>
+                                <span>Include settings</span>
+                            </label>
+                        </div>
+                        <div class="data-actions">
+                            <button id="export-btn" class="btn primary">Export</button>
+                        </div>
+                    </div>
+                    <div class="data-card">
+                        <h3>Import</h3>
+                        <label class="checkbox-row">
+                            <input type="checkbox" id="import-settings-toggle" checked>
+                            <span>Apply settings from file</span>
+                        </label>
+                        <div class="setting-hint data-card-hint">Annotation merge mode is chosen inside the selective import dialog.</div>
+                        <div class="data-actions">
+                            <button id="import-btn" class="btn secondary">Import</button>
+                        </div>
+                    </div>
                 </div>
+                <div class="setting-hint">Exported files can contain settings, annotations, or both. Import applies only the sections selected here.</div>
+                <div id="data-feedback" class="data-feedback" hidden></div>
+                <input type="file" id="import-file" accept=".json" hidden>
             </section>
 
             <section class="settings-section">
-                <h2>Hotkeys</h2>
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    Danger Zone
+                </h2>
                 <div class="setting-item">
-                    <span>Highlight Selection</span>
-                    <input type="text" class="hotkey-input" id="hotkey-highlight" placeholder="Press key...">
+                    <div class="setting-info">
+                        <span>Remove all page annotations</span>
+                        <div class="setting-hint">This will permanently delete every highlight and drawing across all websites. This action cannot be undone.</div>
+                    </div>
+                    <button id="clear-annotations-btn" class="btn danger mini-btn">Clear All Data</button>
                 </div>
                 <div class="setting-item">
-                    <span>Toggle Whiteboard</span>
-                    <input type="text" class="hotkey-input" id="hotkey-whiteboard" placeholder="Press key...">
-                </div>
-                <div class="setting-item">
-                    <span>Toggle Drawings</span>
-                    <input type="text" class="hotkey-input" id="hotkey-drawings" placeholder="Press key...">
-                </div>
-                <div class="setting-item">
-                    <span>Toggle Highlights</span>
-                    <input type="text" class="hotkey-input" id="hotkey-highlights" placeholder="Press key...">
-                </div>
-                <div class="setting-item">
-                    <span>Toggle All UI</span>
-                    <input type="text" class="hotkey-input" id="hotkey-all" placeholder="Press key...">
+                    <div class="setting-info">
+                        <span>Reset all settings to default</span>
+                        <div class="setting-hint">Restore all configurations (theme, hotkeys, colors) to their factory defaults. Your annotations will be kept.</div>
+                    </div>
+                    <button id="reset-defaults-btn" class="btn danger mini-btn">Reset Settings</button>
                 </div>
             </section>
-            
-            <div style="text-align: center; margin-top: 40px; margin-bottom: 20px;">
-                <button id="reset-defaults-btn" class="btn danger">Reset all settings to default</button>
-            </div>
         </main>
         <footer>
             Built by <a href="https://jelodar.com" target="_blank">Reza Jelodar</a> · <a href="https://github.com/Jelodar/marklet" target="_blank">Source Code</a>
         </footer>
     </div>
+    
+    <div id="loading-overlay" class="loading-overlay" hidden>
+        <div class="loading-panel" role="status" aria-live="polite">
+            <div class="loading-title" id="loading-title">Working</div>
+            <div class="loading-text" id="loading-text">Preparing...</div>
+            <div class="loading-track">
+                <div id="loading-progress" class="loading-progress"></div>
+            </div>
+            <div class="loading-actions">
+                <button id="loading-cancel" class="btn secondary" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
     <script src="../utils/tiny-idb.js"></script>
     <script src="../utils/page-storage.js"></script>
     <script src="../utils/shared.js"></script>
+    <script src="../utils/ui-shared.js"></script>
     <script src="settings.js"></script>
 </body>
 </html>

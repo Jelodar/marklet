@@ -76,4 +76,43 @@ describe('Whiteboard Drawing Accuracy and Shift-Snap', () => {
         assert.strictEqual(whiteboard.shiftLockDir, null);
         assert.strictEqual(whiteboard.currentStroke.points.slice(-1)[0].y, 350);
     });
+
+    it('should convert an in-progress freehand stroke into a straight line from the original start when shift is pressed later', () => {
+        whiteboard.setMode('draw');
+        whiteboard.start({ clientX: 100, clientY: 100 });
+        whiteboard.draw({ clientX: 130, clientY: 140, shiftKey: false });
+        whiteboard.draw({ clientX: 180, clientY: 115, shiftKey: true });
+
+        const stroke = whiteboard.currentStroke;
+        assert.strictEqual(whiteboard.shiftLockDir, 'h');
+        assert.strictEqual(stroke.points.length, 2);
+        assert.deepStrictEqual(stroke.points[0], { x: 100, y: 100 });
+        assert.deepStrictEqual(stroke.points[1], { x: 180, y: 100 });
+    });
+
+    it('should recalculate the snap direction from the original start after shift is released and pressed again', () => {
+        whiteboard.setMode('draw');
+        whiteboard.start({ clientX: 100, clientY: 100 });
+        whiteboard.draw({ clientX: 170, clientY: 120, shiftKey: true });
+        assert.strictEqual(whiteboard.shiftLockDir, 'h');
+        assert.deepStrictEqual(whiteboard.currentStroke.points, [
+            { x: 100, y: 100 },
+            { x: 170, y: 100 }
+        ]);
+
+        whiteboard.draw({ clientX: 190, clientY: 240, shiftKey: false });
+        assert.strictEqual(whiteboard.shiftLockDir, null);
+        assert.deepStrictEqual(whiteboard.currentStroke.points, [
+            { x: 100, y: 100 },
+            { x: 170, y: 100 },
+            { x: 190, y: 240 }
+        ]);
+
+        whiteboard.draw({ clientX: 130, clientY: 320, shiftKey: true });
+        assert.strictEqual(whiteboard.shiftLockDir, 'v');
+        assert.deepStrictEqual(whiteboard.currentStroke.points, [
+            { x: 100, y: 100 },
+            { x: 100, y: 320 }
+        ]);
+    });
 });

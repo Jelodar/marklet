@@ -43,4 +43,23 @@ describe('DOMUtils', () => {
     assert.strictEqual(recoveredRange.startOffset, 0);
     assert.strictEqual(recoveredRange.endOffset, 5);
   });
+
+  it('should exclude hidden and non-visible text from snapshots', () => {
+    document.body.innerHTML = `
+      Visible
+      <span hidden>Hidden</span>
+      <span style="display:none">Gone</span>
+      <span style="visibility:hidden">Invisible</span>
+      <script>ignored()</script>
+      <style>.x { color: red; }</style>
+      <span> Text</span>
+    `;
+
+    const snapshot = DOMUtils.createTextSnapshot();
+
+    assert.strictEqual(snapshot.text.replace(/\s+/g, ' ').trim(), 'Visible Text');
+    assert.strictEqual(snapshot.text.includes('Hidden'), false);
+    assert.strictEqual(snapshot.text.includes('Gone'), false);
+    assert.strictEqual(snapshot.text.includes('Invisible'), false);
+  });
 });

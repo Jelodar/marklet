@@ -145,4 +145,17 @@ describe('Whiteboard Performance & Maintenance', () => {
 
         document.documentElement.getBoundingClientRect = originalGetBCR;
     });
+
+    it('should throttle active scroll redraws through requestAnimationFrame', async () => {
+        assert.ok(whiteboard, 'Whiteboard should be initialized');
+        whiteboard.toggle(true);
+        const redrawSpy = mock.method(whiteboard, 'redraw', () => {});
+
+        whiteboard.scrollListener();
+        whiteboard.scrollListener();
+        whiteboard.scrollListener();
+        await new Promise(resolve => setTimeout(resolve, 10));
+
+        assert.strictEqual(redrawSpy.mock.calls.length, 1);
+    });
 });

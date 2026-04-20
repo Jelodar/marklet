@@ -48,9 +48,12 @@ Designed with a focus on **privacy**, **performance**, and **stability**, Markle
 | :--- | :--- |
 | **Highlight Selection** | `Alt + H` |
 | **Toggle Whiteboard** | `Alt + Shift + W` |
-| **Undo Interaction** | `Ctrl + Z` |
-| **Redo Interaction** | `Ctrl + Y` |
+| **Toggle Drawings Visibility** | `Alt + Shift + D` |
+| **Toggle Highlights Visibility** | `Alt + Shift + H` |
+| **Undo Interaction** | `Ctrl + Z` / `Cmd + Z` |
+| **Redo Interaction** | `Ctrl + Y` / `Cmd + Y` / `Cmd + Shift + Z` |
 | **Delete Selected Stroke** | `Delete` / `Backspace` |
+| **Move Selected Stroke** | `Arrow Keys` ( + `Shift` for 10px) |
 
 ---
 

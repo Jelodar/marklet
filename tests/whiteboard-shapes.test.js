@@ -76,6 +76,7 @@ describe('Whiteboard Shapes', () => {
     it('should undo and redo', () => {
         whiteboard.setMode('rect');
         whiteboard.start({ pageX: 10, pageY: 10 });
+        whiteboard.draw({ pageX: 20, pageY: 20 });
         whiteboard.end();
         assert.strictEqual(whiteboard.strokes.length, 1);
 

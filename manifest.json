@@ -38,6 +38,7 @@
         "utils/page-storage.js",
         "utils/shared.js",
         "utils/consts.js",
+        "utils/ui-shared.js",
         "content/assets.js",
         "content/dom_utils.js",
         "content/ui.js",
