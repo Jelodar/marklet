@@ -133,24 +133,49 @@
       margin: 16px 0 8px;
     }
     #highlights-list {
-      max-height: 250px;
+      max-height: 280px;
       overflow-y: auto;
       border: 1px solid var(--border-color);
-      border-radius: 4px;
-      padding: 4px;
+      border-radius: 8px;
+      padding: 8px;
       background-color: var(--card-bg);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-color) transparent;
+    }
+    #highlights-list::-webkit-scrollbar {
+      width: 5px;
+    }
+    #highlights-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #highlights-list::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 10px;
+    }
+    #highlights-list::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
     }
     .highlight-item {
       font-size: 13px;
-      padding: 8px;
-      border-bottom: 1px solid var(--border-color);
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
       border-left: 4px solid var(--highlight-color, transparent);
+      background-color: color-mix(in srgb, var(--highlight-color, transparent), transparent 94%);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
     }
-    .highlight-item:last-child {
-      border-bottom: none;
+    .highlight-item:hover {
+      background-color: color-mix(in srgb, var(--highlight-color, transparent), transparent 88%);
+      border-color: color-mix(in srgb, var(--highlight-color, transparent), var(--border-color) 70%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     }
 
     .highlight-text {
@@ -159,7 +184,8 @@
       text-overflow: ellipsis;
       font-style: italic;
       color: var(--text-color);
-      opacity: 0.9;
+      line-height: 1.4;
+      font-weight: 450;
     }
     .highlight-actions {
       display: flex;
@@ -192,25 +218,49 @@
 
     .action-btn {
       font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 3px;
-      border: 1px solid var(--border-color);
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid color-mix(in srgb, var(--border-color), black 15%);
       background: var(--card-bg);
       cursor: pointer;
       color: var(--text-color);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      font-weight: 600;
+      letter-spacing: 0.01em;
     }
     .action-btn:hover {
       background: var(--hover-bg);
       border-color: var(--text-muted);
+      transform: translateY(-1.5px);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .btn-goto:hover {
+      background-color: color-mix(in srgb, var(--highlight-color, var(--primary-color)), transparent 75%);
+      color: #000;
+      border-color: color-mix(in srgb, var(--highlight-color, var(--primary-color)), black 20%);
+    }
+    .btn-copy:hover {
+      background-color: color-mix(in srgb, var(--highlight-color, var(--primary-color)), transparent 82%);
+      border-color: color-mix(in srgb, var(--highlight-color, var(--primary-color)), black 15%);
+    }
+    .btn-delete:hover {
+      background-color: #fff5f5;
+      color: #d93025;
+      border-color: #d93025;
+    }
+
+    [data-theme="dark"] .btn-goto:hover,
+    [data-theme="dark"] .btn-copy:hover {
+      color: #fff;
+    }
+    [data-theme="dark"] .btn-delete:hover {
+      background-color: #3c1e1e;
+      color: #ff6b6b;
+      border-color: #ff6b6b;
     }
 
     .action-btn.row {
       width: 100%;
-    }
-
-    .btn-delete:hover {
-      color: #ff4d4d;
-      border-color: #ff4d4d;
     }
 
     .text-muted { color: var(--text-muted); }

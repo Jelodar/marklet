@@ -504,7 +504,12 @@ global.SharedUI = {
             if (arg.text !== undefined) el.textContent = arg.text;
             if (arg.html !== undefined) el.innerHTML = arg.html;
             if (arg.className) el.classList.add(...arg.className.trim().split(/\s+/).filter(Boolean));
-            if (arg.style && typeof arg.style === 'object') Object.assign(el.style, arg.style);
+            if (arg.style && typeof arg.style === 'object') {
+              Object.entries(arg.style).forEach(([k, v]) => {
+                if (k.startsWith('--')) el.style.setProperty(k, v);
+                else el.style[k] = v;
+              });
+            }
             if (arg.attrs) Object.entries(arg.attrs).forEach(([k, v]) => {
               if (v !== null && v !== undefined) el.setAttribute(k, v);
             });

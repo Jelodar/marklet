@@ -55,7 +55,7 @@ describe('Bug Reproduction: Overlapping Highlights', () => {
         let marks = document.querySelectorAll('mark');
         assert.strictEqual(marks.length, 1);
         assert.strictEqual(marks[0].textContent, "that");
-        assert.strictEqual(marks[0].style.backgroundColor, "yellow");
+        assert.strictEqual(marks[0].style.getPropertyValue("--marklet-highlight-color"), "yellow");
         
         const markText = marks[0].firstChild;
         const afterMarkText = marks[0].nextSibling;
@@ -71,7 +71,7 @@ describe('Bug Reproduction: Overlapping Highlights', () => {
         await highlighter.applyHighlight(range3, "red");       
         const marksFinal = document.querySelectorAll('.marklet-highlight');
 
-        const hasTha = Array.from(marksFinal).some(m => m.textContent === "tha" && m.style.backgroundColor === "yellow");
+        const hasTha = Array.from(marksFinal).some(m => m.textContent === "tha" && m.style.getPropertyValue("--marklet-highlight-color") === "yellow");
         assert.ok(hasTha, 'Should have "tha" highlighted in yellow');
         
         const hasThat = Array.from(marksFinal).some(m => m.textContent === "that");
