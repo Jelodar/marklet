@@ -99,7 +99,19 @@ class Marklet {
     this.documentMouseDownListener = null;
   }
   ensureShadowHost() {
-    if (this.shadowHost && document.contains(this.shadowHost)) return;
+    const scrollRoot = DOMUtils.getScrollRoot();
+    if (this.shadowHost && document.contains(this.shadowHost)) {
+      if (this.shadowHost.parentElement !== scrollRoot) {
+        if (scrollRoot !== document.documentElement && scrollRoot !== document.body) {
+          const style = window.getComputedStyle(scrollRoot);
+          if (style.position === "static") {
+            scrollRoot.style.position = "relative";
+          }
+        }
+        scrollRoot.appendChild(this.shadowHost);
+      }
+      return;
+    }
     this.injectGlobalStyles();
     this.shadowHost = Object.assign(document.createElement("div"), { id: "marklet-root" });
     Object.assign(this.shadowHost.style, {
@@ -116,7 +128,13 @@ class Marklet {
       zIndex: CONSTANTS.Z_INDEX_TOOLTIP,
       all: "initial"
     });
-    (document.documentElement || document.body).appendChild(this.shadowHost);
+    if (scrollRoot !== document.documentElement && scrollRoot !== document.body) {
+      const style = window.getComputedStyle(scrollRoot);
+      if (style.position === "static") {
+        scrollRoot.style.position = "relative";
+      }
+    }
+    scrollRoot.appendChild(this.shadowHost);
     this.shadow = this.shadowHost.attachShadow({ mode: "open" });
     this.initStyles();
     SharedUI.init(this.shadow);
@@ -429,17 +447,19 @@ class Marklet {
   handleKey(e) {
     if (!SharedUtils.isValidExtension()) return;
     const isWhiteboard = this.whiteboardActive;
-    const isMarkletTextInput = !!(e.target?.classList && e.target.classList.contains("marklet-text-input"));
+    const isInputTarget = e.composedPath().some(el => 
+      (el.tagName && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) || 
+      el.isContentEditable
+    );
+    if (isInputTarget) return;
     if (isWhiteboard) {
-      this.consumeKeyEvent(e, !isMarkletTextInput);
-      if (isMarkletTextInput) return;
+      this.consumeKeyEvent(e, true);
       if (e.type === 'keydown') {
         if (this.ui) this.ui.triggerKey(e);
         this.runHotkeyAction(this.getMatchedHotkeyAction(e), e);
       }
       return;
     }
-    if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
     const action = this.getMatchedHotkeyAction(e);
     if (!action) return;
     this.consumeKeyEvent(e);

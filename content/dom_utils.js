@@ -241,6 +241,31 @@ class DOMUtils {
     
     return fragment;
   }
+  static getScrollRoot() {
+    let bestRoot = document.documentElement;
+    let maxArea = 0;
+    const isScrollable = (el) => {
+      if (el === document.body || el === document.documentElement) return false;
+      if (el.id === "marklet-root" || el.closest("#marklet-root")) return false;
+      const style = window.getComputedStyle(el);
+      const overflowY = style.overflowY || style.overflow;
+      if (!/auto|scroll/.test(overflowY)) return false;
+      return el.scrollHeight > el.clientHeight;
+    };
+
+    const elements = document.querySelectorAll('*');
+    for (const el of elements) {
+      if (isScrollable(el)) {
+        const rect = el.getBoundingClientRect();
+        const area = rect.width * rect.height;
+        if (area > maxArea) {
+          maxArea = area;
+          bestRoot = el;
+        }
+      }
+    }
+    return bestRoot;
+  }
 }
 
 if (typeof module !== 'undefined') {

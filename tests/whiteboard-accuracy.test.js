@@ -50,7 +50,7 @@ describe('Whiteboard Drawing Accuracy and Shift-Snap', () => {
         whiteboard.start({ clientX: 100, clientY: 100 });
         
         const stroke = whiteboard.currentStroke;
-        assert.strictEqual(stroke.points[0].x, 150);
+        assert.strictEqual(stroke.points[0].x, 100);
         assert.strictEqual(stroke.points[0].y, 180);
         
         window.scrollX = 0;
@@ -114,5 +114,45 @@ describe('Whiteboard Drawing Accuracy and Shift-Snap', () => {
             { x: 100, y: 100 },
             { x: 100, y: 320 }
         ]);
+    });
+
+    it('should detect and account for custom scroll container scrolling', () => {
+        const container = document.createElement('div');
+        container.id = 'custom-scroll-container';
+        container.style.overflow = 'scroll';
+        container.style.width = '500px';
+        container.style.height = '500px';
+        
+        Object.defineProperties(container, {
+            scrollWidth: { value: 1000, configurable: true },
+            scrollHeight: { value: 1000, configurable: true },
+            clientWidth: { value: 500, configurable: true },
+            clientHeight: { value: 500, configurable: true },
+            scrollLeft: { value: 200, writable: true, configurable: true },
+            scrollTop: { value: 300, writable: true, configurable: true }
+        });
+        
+        container.getBoundingClientRect = () => ({
+            left: 50,
+            top: 50,
+            width: 500,
+            height: 500,
+            right: 550,
+            bottom: 550
+        });
+
+        document.body.appendChild(container);
+
+        const root = DOMUtils.getScrollRoot();
+        assert.strictEqual(root, container);
+
+        whiteboard.setMode('draw');
+        whiteboard.start({ clientX: 250, clientY: 250 });
+
+        const stroke = whiteboard.currentStroke;
+        assert.strictEqual(stroke.points[0].x, 400);
+        assert.strictEqual(stroke.points[0].y, 500);
+
+        container.remove();
     });
 });

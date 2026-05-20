@@ -108,7 +108,7 @@ global.UI = class {
   destroy() {} 
   toggleDock() {} 
 };
-global.DOMUtils = { stripHighlights: () => {} };
+global.DOMUtils = { stripHighlights: () => {}, getScrollRoot: () => document.documentElement };
 global.SHADOW_STYLES = "";
 global.CONSTANTS = require('../utils/consts.js').CONSTANTS;
 

@@ -618,13 +618,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         try {
             const hasItems = annotationState.items.length > 0;
-            const useOverlay = forceOverlay || !!annotationState.search;
-            const useListOverlay = hasItems && !useOverlay;
+            const useOverlay = forceOverlay;
+            const useListOverlay = (hasItems || !!annotationState.search) && !useOverlay;
             
             if (useOverlay) {
                 const totalPages = await pageStore.count();
                 showLoading({
-                    title: annotationState.search ? 'Searching annotations' : 'Loading annotations',
+                    title: 'Loading annotations',
                     text: totalPages > 0 ? `Scanning 0 of ${totalPages} pages...` : 'Scanning pages...',
                     progress: 0,
                     cancelable: true,
@@ -1225,7 +1225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         annotationState.page = 1;
         if (annotationState.timer) clearTimeout(annotationState.timer);
         annotationState.timer = setTimeout(() => {
-            loadAnnotations({ forceOverlay: !!pageSearch.value.trim() });
+            loadAnnotations();
         }, 180);
     };
 
