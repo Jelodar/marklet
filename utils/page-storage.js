@@ -402,8 +402,8 @@ const StorageProxy = {
   raw
 };
 
-const activeStorage = typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id
-  ? ((typeof location !== 'undefined' && location.protocol === 'chrome-extension:') ? directStorage : StorageProxy)
+const activeStorage = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) || (typeof browser !== 'undefined' && browser.runtime && browser.runtime.id)
+  ? ((typeof location !== 'undefined' && (location.protocol === 'chrome-extension:' || location.protocol === 'moz-extension:')) ? directStorage : StorageProxy)
   : directStorage;
 
 globalThis.PageStorage = activeStorage;

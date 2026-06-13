@@ -481,6 +481,6 @@ class Marklet {
 }
 if (typeof module !== 'undefined') {
   module.exports = { Marklet };
-} else if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
+} else if (((typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) || (typeof browser !== 'undefined' && browser.runtime && browser.runtime.id))) {
   new Marklet();
 }

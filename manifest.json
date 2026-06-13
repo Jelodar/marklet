@@ -27,7 +27,20 @@
     "open_in_tab": true
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": [
+      "utils/tiny-idb.js",
+      "utils/page-storage.js",
+      "utils/consts.js",
+      "utils/shared.js",
+      "background.js"
+    ]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "marklet@rz-extensions.local",
+      "strict_min_version": "109.0"
+    }
   },
   "content_scripts": [
     {

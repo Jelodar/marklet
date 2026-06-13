@@ -1,4 +1,6 @@
-importScripts('utils/tiny-idb.js', 'utils/page-storage.js', 'utils/consts.js', 'utils/shared.js');
+if (typeof importScripts !== 'undefined') {
+  importScripts('utils/tiny-idb.js', 'utils/page-storage.js', 'utils/consts.js', 'utils/shared.js');
+}
 
 const sendDbResponse = (promise, sendResponse, onSuccess) => {
   promise.then((value) => {

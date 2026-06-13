@@ -34,8 +34,16 @@ describe('Savability Logic', () => {
         assert.strictEqual(SharedUtils.isRestricted('chrome://settings'), true);
     });
 
+    it('should identify moz-extension URLs as restricted', () => {
+        assert.strictEqual(SharedUtils.isRestricted('moz-extension://uuid/page.html'), true);
+    });
+
     it('should identify about URLs as restricted', () => {
         assert.strictEqual(SharedUtils.isRestricted('about:config'), true);
+    });
+
+    it('should identify moz-extension URLs as non-savable', () => {
+        assert.strictEqual(SharedUtils.isSavable('moz-extension://uuid/page.html'), false);
     });
 
     it('should identify blob URLs as NOT restricted', () => {

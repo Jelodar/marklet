@@ -340,17 +340,17 @@ const SharedUtils = {
       return new URL(u).hostname;
     } catch (e) { return null; }
   },
-  isValidExtension: () => !!(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id),
+  isValidExtension: () => !!((typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) || (typeof browser !== 'undefined' && browser.runtime && browser.runtime.id)),
   isSavable: (u) => {
     try {
       const url = new URL(u);
-      return !['blob:', 'data:', 'chrome:', 'about:', 'chrome-extension:', 'edge:', 'devtools:', 'view-source:'].includes(url.protocol);
+      return !['blob:', 'data:', 'chrome:', 'about:', 'chrome-extension:', 'moz-extension:', 'edge:', 'devtools:', 'view-source:'].includes(url.protocol);
     } catch (e) { return false; }
   },
   isRestricted: (u) => {
     try {
       const url = new URL(u);
-      return ['chrome:', 'about:', 'chrome-extension:', 'edge:', 'devtools:', 'view-source:'].includes(url.protocol);
+      return ['chrome:', 'about:', 'chrome-extension:', 'moz-extension:', 'edge:', 'devtools:', 'view-source:'].includes(url.protocol);
     } catch (e) { return true; }
   },
   getSystemTheme: () => {

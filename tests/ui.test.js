@@ -128,4 +128,17 @@ describe('SharedUtils.isValidExtension', () => {
     assert.strictEqual(SharedUtils.isValidExtension(), false);
     global.chrome = originalChrome;
   });
+
+  it('should return true if browser runtime is present', () => {
+    const originalChrome = global.chrome;
+    global.chrome = undefined;
+    global.browser = { runtime: { id: 'firefox-test' } };
+    assert.strictEqual(SharedUtils.isValidExtension(), true);
+    global.browser = undefined;
+    global.chrome = originalChrome;
+  });
+
+  it('should return true if chrome runtime is present', () => {
+    assert.strictEqual(SharedUtils.isValidExtension(), true);
+  });
 });
